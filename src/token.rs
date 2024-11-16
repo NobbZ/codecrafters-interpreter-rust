@@ -13,6 +13,13 @@ enum Token {
     LeftBrace,
     RightBrace,
 
+    Star,
+    Dot,
+    Comma,
+    Plus,
+    Minus,
+    Semicolon,
+
     Eof,
 }
 
@@ -30,6 +37,14 @@ pub fn tokenize(args: TokenizeArgs) -> Result<()> {
 
             Token::LeftBrace => "LEFT_BRACE { null",
             Token::RightBrace => "RIGHT_BRACE } null",
+
+            Token::Star => "STAR * null",
+            Token::Dot => "DOT . null",
+            Token::Comma => "COMMA , null",
+            Token::Plus => "PLUS + null",
+            Token::Minus => "MINUS - null",
+            Token::Semicolon => "SEMICOLON ; null",
+
             Token::Eof => "EOF  null",
         };
 
@@ -51,6 +66,12 @@ where
             ')' => result.push(Token::RightParen),
             '{' => result.push(Token::LeftBrace),
             '}' => result.push(Token::RightBrace),
+            '*' => result.push(Token::Star),
+            '.' => result.push(Token::Dot),
+            ',' => result.push(Token::Comma),
+            '+' => result.push(Token::Plus),
+            '-' => result.push(Token::Minus),
+            ';' => result.push(Token::Semicolon),
             _ => bail!("unknown token: {:?}", c),
         }
     }
@@ -62,12 +83,11 @@ where
 
 #[cfg(test)]
 mod tests {
+    use super::Token::*;
     use super::*;
 
     #[test]
     fn scans_example_from_exercise() -> Result<()> {
-        use Token::*;
-
         assert_eq!(
             vec![LeftParen, LeftParen, RightParen, Eof],
             tokenize_str("(()")?
@@ -78,26 +98,20 @@ mod tests {
 
     #[test]
     fn scans_example_from_test_1() -> Result<()> {
-        use Token::*;
-
         assert_eq!(vec![LeftParen, Eof], tokenize_str("(")?);
 
         Ok(())
     }
-    
+
     #[test]
     fn scans_example_from_test_2() -> Result<()> {
-        use Token::*;
-
         assert_eq!(vec![RightParen, RightParen, Eof], tokenize_str("))")?);
 
         Ok(())
     }
-    
+
     #[test]
     fn scans_example_from_test_3() -> Result<()> {
-        use Token::*;
-
         assert_eq!(
             vec![LeftParen, LeftParen, RightParen, RightParen, RightParen, Eof],
             tokenize_str("(()))")?
@@ -108,10 +122,10 @@ mod tests {
 
     #[test]
     fn scans_example_from_test_4() -> Result<()> {
-        use Token::*;
-
         assert_eq!(
-            vec![LeftParen, RightParen, LeftParen, LeftParen, LeftParen, RightParen, RightParen, Eof],
+            vec![
+                LeftParen, RightParen, LeftParen, LeftParen, LeftParen, RightParen, RightParen, Eof
+            ],
             tokenize_str("()((())")?
         );
 
@@ -120,11 +134,16 @@ mod tests {
 
     #[test]
     fn scan_braces() -> Result<()> {
-        use Token::*;
+        assert_eq!(vec![RightBrace, LeftBrace, Eof], tokenize_str("}{")?);
 
+        Ok(())
+    }
+
+    #[test]
+    fn scan_more_single_char_tokens() -> Result<()> {
         assert_eq!(
-            vec![RightBrace, LeftBrace, Eof],
-            tokenize_str("}{")?
+            vec![LeftParen, LeftBrace, Star, Dot, Comma, Plus, Star, RightBrace, RightParen, Eof],
+            tokenize_str("({*.,+*})")?
         );
 
         Ok(())
