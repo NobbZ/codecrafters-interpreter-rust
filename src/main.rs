@@ -1,26 +1,16 @@
 mod interface;
+mod token;
 
-use std::fs;
+use anyhow::Result;
 
-use anyhow::{bail, Context, Result};
-
-use interface::{InterpreterCommand, InterpreterParser};
+use interface::{InterpreterCommand, InterpreterParser, TokenizeArgs};
 
 fn main() -> Result<()> {
     let args = <InterpreterParser as clap::Parser>::parse();
 
     match args.command {
-        InterpreterCommand::Tokenize(tok_args) => {
-            let file_contents = fs::read_to_string(&tok_args.file)
-                .with_context(|| format!("failed to read {:?}", &tok_args.file))?;
-
-            if !file_contents.is_empty() {
-                bail!("Scanner not implemented");
-            } else {
-                println!("EOF  null");
-            }
-        }
-    }
+        InterpreterCommand::Tokenize(tok_args) => token::tokenize(tok_args)?,
+    };
 
     Ok(())
 }
