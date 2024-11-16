@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::fs;
 
-use anyhow::{bail, Context, Ok, Result};
+use anyhow::{ensure, Context, Ok, Result};
 
 use crate::TokenizeArgs;
 
@@ -27,7 +27,7 @@ pub fn tokenize(args: TokenizeArgs) -> Result<()> {
     let file_contents = fs::read_to_string(&args.file)
         .with_context(|| format!("failed to read {:?}", &args.file))?;
 
-    let tokens =
+    let (tokens, err_cnt) =
         tokenize_str(&file_contents).with_context(|| format!("scanning {}", file_contents))?;
 
     for token in tokens.iter() {
@@ -51,14 +51,17 @@ pub fn tokenize(args: TokenizeArgs) -> Result<()> {
         println!("{}", str);
     }
 
+    ensure!(err_cnt == 0);
+
     Ok(())
 }
 
-fn tokenize_str<S>(s: S) -> Result<Vec<Token>>
+fn tokenize_str<S>(s: S) -> Result<(Vec<Token>, usize)>
 where
     S: AsRef<str> + Debug,
 {
     let mut result = Vec::new();
+    let mut err_cnt: usize = 0;
 
     for c in s.as_ref().chars() {
         match c {
@@ -72,13 +75,16 @@ where
             '+' => result.push(Token::Plus),
             '-' => result.push(Token::Minus),
             ';' => result.push(Token::Semicolon),
-            _ => bail!("unknown token: {:?}", c),
+            _ => {
+                eprintln!("[Line 1] Error: Unexpected character: {}", c);
+                err_cnt += 1;
+            }
         }
     }
 
     result.push(Token::Eof);
 
-    Ok(result)
+    Ok((result, err_cnt))
 }
 
 #[cfg(test)]
@@ -89,7 +95,7 @@ mod tests {
     #[test]
     fn scans_example_from_exercise() -> Result<()> {
         assert_eq!(
-            vec![LeftParen, LeftParen, RightParen, Eof],
+            (vec![LeftParen, LeftParen, RightParen, Eof], 0),
             tokenize_str("(()")?
         );
 
@@ -98,14 +104,14 @@ mod tests {
 
     #[test]
     fn scans_example_from_test_1() -> Result<()> {
-        assert_eq!(vec![LeftParen, Eof], tokenize_str("(")?);
+        assert_eq!((vec![LeftParen, Eof], 0), tokenize_str("(")?);
 
         Ok(())
     }
 
     #[test]
     fn scans_example_from_test_2() -> Result<()> {
-        assert_eq!(vec![RightParen, RightParen, Eof], tokenize_str("))")?);
+        assert_eq!((vec![RightParen, RightParen, Eof], 0), tokenize_str("))")?);
 
         Ok(())
     }
@@ -113,7 +119,10 @@ mod tests {
     #[test]
     fn scans_example_from_test_3() -> Result<()> {
         assert_eq!(
-            vec![LeftParen, LeftParen, RightParen, RightParen, RightParen, Eof],
+            (
+                vec![LeftParen, LeftParen, RightParen, RightParen, RightParen, Eof],
+                0
+            ),
             tokenize_str("(()))")?
         );
 
@@ -123,9 +132,13 @@ mod tests {
     #[test]
     fn scans_example_from_test_4() -> Result<()> {
         assert_eq!(
-            vec![
-                LeftParen, RightParen, LeftParen, LeftParen, LeftParen, RightParen, RightParen, Eof
-            ],
+            (
+                vec![
+                    LeftParen, RightParen, LeftParen, LeftParen, LeftParen, RightParen, RightParen,
+                    Eof
+                ],
+                0
+            ),
             tokenize_str("()((())")?
         );
 
@@ -134,7 +147,7 @@ mod tests {
 
     #[test]
     fn scan_braces() -> Result<()> {
-        assert_eq!(vec![RightBrace, LeftBrace, Eof], tokenize_str("}{")?);
+        assert_eq!((vec![RightBrace, LeftBrace, Eof], 0), tokenize_str("}{")?);
 
         Ok(())
     }
@@ -142,8 +155,23 @@ mod tests {
     #[test]
     fn scan_more_single_char_tokens() -> Result<()> {
         assert_eq!(
-            vec![LeftParen, LeftBrace, Star, Dot, Comma, Plus, Star, RightBrace, RightParen, Eof],
+            (
+                vec![
+                    LeftParen, LeftBrace, Star, Dot, Comma, Plus, Star, RightBrace, RightParen, Eof
+                ],
+                0
+            ),
             tokenize_str("({*.,+*})")?
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn scan_with_unkown_tokens() -> Result<()> {
+        assert_eq!(
+            (vec![Comma, Dot, LeftParen, Eof], 2),
+            tokenize_str(",.$(#")?
         );
 
         Ok(())

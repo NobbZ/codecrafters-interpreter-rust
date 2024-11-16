@@ -5,12 +5,16 @@ use anyhow::Result;
 
 use interface::{InterpreterCommand, InterpreterParser, TokenizeArgs};
 
-fn main() -> Result<()> {
+fn main() -> Result<(), usize> {
     let args = <InterpreterParser as clap::Parser>::parse();
 
-    match args.command {
-        InterpreterCommand::Tokenize(tok_args) => token::tokenize(tok_args)?,
+    let ec = match args.command {
+        InterpreterCommand::Tokenize(tok_args) => token::tokenize(tok_args).map_or(65, |_| 0),
     };
 
-    Ok(())
+    if ec == 0 {
+        Ok(())
+    } else {
+        Err(ec)
+    }
 }
