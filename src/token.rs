@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::fs;
 
-use anyhow::{bail, Ok, Result, Context};
+use anyhow::{bail, Context, Ok, Result};
 
 use crate::TokenizeArgs;
 
@@ -57,12 +57,54 @@ mod tests {
     use super::*;
 
     #[test]
-    fn scans_example() -> Result<()> {
+    fn scans_example_from_exercise() -> Result<()> {
         use Token::*;
 
         assert_eq!(
             vec![LeftParen, LeftParen, RightParen, Eof],
             tokenize_str("(()")?
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn scans_example_from_test_1() -> Result<()> {
+        use Token::*;
+
+        assert_eq!(vec![LeftParen, Eof], tokenize_str("(")?);
+
+        Ok(())
+    }
+    
+    #[test]
+    fn scans_example_from_test_2() -> Result<()> {
+        use Token::*;
+
+        assert_eq!(vec![RightParen, RightParen, Eof], tokenize_str("))")?);
+
+        Ok(())
+    }
+    
+    #[test]
+    fn scans_example_from_test_3() -> Result<()> {
+        use Token::*;
+
+        assert_eq!(
+            vec![LeftParen, LeftParen, RightParen, RightParen, RightParen, Eof],
+            tokenize_str("(()))")?
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn scans_example_from_test_4() -> Result<()> {
+        use Token::*;
+
+        assert_eq!(
+            vec![LeftParen, RightParen, LeftParen, LeftParen, LeftParen, RightParen, RightParen, Eof],
+            tokenize_str("()((())")?
         );
 
         Ok(())
