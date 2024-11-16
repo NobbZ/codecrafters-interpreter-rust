@@ -76,7 +76,7 @@ where
             '-' => result.push(Token::Minus),
             ';' => result.push(Token::Semicolon),
             _ => {
-                eprintln!("[Line 1] Error: Unexpected character: {}", c);
+                eprintln!("[line 1] Error: Unexpected character: {}", c);
                 err_cnt += 1;
             }
         }
