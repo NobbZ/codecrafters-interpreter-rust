@@ -1,33 +1,26 @@
-use std::env;
+mod interface;
+
 use std::fs;
-use std::io::{self, Write};
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 3 {
-        writeln!(io::stderr(), "Usage: {} tokenize <filename>", args[0]).unwrap();
-        return;
-    }
+use anyhow::{bail, Context, Result};
 
-    let command = &args[1];
-    let filename = &args[2];
+use interface::{InterpreterCommand, InterpreterParser};
 
-    match command.as_str() {
-        "tokenize" => {
-            let file_contents = fs::read_to_string(filename).unwrap_or_else(|_| {
-                writeln!(io::stderr(), "Failed to read file {}", filename).unwrap();
-                String::new()
-            });
+fn main() -> Result<()> {
+    let args = <InterpreterParser as clap::Parser>::parse();
+
+    match args.command {
+        InterpreterCommand::Tokenize(tok_args) => {
+            let file_contents = fs::read_to_string(&tok_args.file)
+                .with_context(|| format!("failed to read {:?}", &tok_args.file))?;
 
             if !file_contents.is_empty() {
-                panic!("Scanner not implemented");
+                bail!("Scanner not implemented");
             } else {
-                println!("EOF  null"); // Placeholder, remove this line when implementing the scanner
+                println!("EOF  null");
             }
         }
-        _ => {
-            writeln!(io::stderr(), "Unknown command: {}", command).unwrap();
-            return;
-        }
     }
+
+    Ok(())
 }
