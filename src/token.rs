@@ -10,6 +10,9 @@ enum Token {
     LeftParen,
     RightParen,
 
+    LeftBrace,
+    RightBrace,
+
     Eof,
 }
 
@@ -24,6 +27,9 @@ pub fn tokenize(args: TokenizeArgs) -> Result<()> {
         let str = match token {
             Token::LeftParen => "LEFT_PAREN ( null",
             Token::RightParen => "RIGHT_PAREN ) null",
+
+            Token::LeftBrace => "LEFT_BRACE { null",
+            Token::RightBrace => "RIGHT_BRACE } null",
             Token::Eof => "EOF  null",
         };
 
@@ -43,6 +49,8 @@ where
         match c {
             '(' => result.push(Token::LeftParen),
             ')' => result.push(Token::RightParen),
+            '{' => result.push(Token::LeftBrace),
+            '}' => result.push(Token::RightBrace),
             _ => bail!("unknown token: {:?}", c),
         }
     }
@@ -105,6 +113,18 @@ mod tests {
         assert_eq!(
             vec![LeftParen, RightParen, LeftParen, LeftParen, LeftParen, RightParen, RightParen, Eof],
             tokenize_str("()((())")?
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn scan_braces() -> Result<()> {
+        use Token::*;
+
+        assert_eq!(
+            vec![RightBrace, LeftBrace, Eof],
+            tokenize_str("}{")?
         );
 
         Ok(())
