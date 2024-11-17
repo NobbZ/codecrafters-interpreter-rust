@@ -34,6 +34,8 @@ enum Token {
     GtEq,
 
     Eof,
+    Skip,
+    NewLine,
 }
 
 impl Token {
@@ -79,6 +81,7 @@ pub fn tokenize(args: TokenizeArgs) -> Result<()> {
             GtEq => "GREATER_EQUAL >= null",
 
             Eof => "EOF  null",
+            Skip | NewLine => unreachable!("Should never really happen"),
         };
 
         println!("{}", str);
@@ -95,18 +98,24 @@ where
 {
     let mut result = Vec::new();
     let mut err_cnt: usize = 0;
+    let mut line = 1;
 
     let mut chars = s.as_ref().chars().peekable();
 
     loop {
         match next_token(&mut chars) {
+            Ok(Token::NewLine) => {
+                line += 1;
+            }
+            Ok(Token::Skip) => (),
             Ok(token) => {
                 result.push(token.clone());
                 if token.is_eof() {
                     break;
                 };
             }
-            Err(_) => {
+            Err(c) => {
+                eprintln!("[line {}] Error: Unexpected character: {}", line, c);
                 err_cnt += 1;
             }
         }
@@ -120,7 +129,8 @@ where
     I: Iterator<Item = char>,
 {
     match chars.next() {
-        Some(' ' | '\n' | '\t') => next_token(chars),
+        Some(' ' | '\t') => Ok(Token::Skip),
+        Some('\n') => Ok(Token::NewLine),
         Some('(') => Ok(Token::LeftParen),
         Some(')') => Ok(Token::RightParen),
         Some('{') => Ok(Token::LeftBrace),
@@ -166,10 +176,7 @@ where
             }
             _ => Ok(Token::Slash),
         },
-        Some(c) => {
-            eprintln!("[line 1] Error: Unexpected character: {}", c);
-            Err(c)
-        }
+        Some(c) => Err(c),
         None => Ok(Token::Eof),
     }
 }
