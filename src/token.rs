@@ -172,11 +172,16 @@ impl Token {
             }
             String(s) => s.clone(),
             Number(NumberType::Float(s)) => {
-                let f = s.parse::<f64>().unwrap_or_else(|_| unreachable!("Should always be a good float")).to_string();
-                if f.contains('.') { f } else {
+                let f = s
+                    .parse::<f64>()
+                    .unwrap_or_else(|_| unreachable!("Should always be a good float"))
+                    .to_string();
+                if f.contains('.') {
+                    f
+                } else {
                     format!("{}.0", f)
                 }
-            },
+            }
             Number(NumberType::Integer(s)) => format!("{}.0", s),
             Skip | NewLine => unreachable!("This tokens should never be linified"),
         }
@@ -351,179 +356,36 @@ mod tests {
     use super::Token::*;
     use super::*;
 
-    #[test]
-    fn scans_example_from_exercise() -> Result<()> {
-        assert_eq!(
-            (vec![LeftParen, LeftParen, RightParen, Eof], 0),
-            tokenize_str("(()")?
-        );
-
-        Ok(())
+    macro_rules! example {
+        ($($name:ident : $input:tt => $expected:tt,)+) => {
+            $(
+                #[test]
+                fn $name() -> Result<()> {
+                    assert_eq!($expected, tokenize_str($input)?);
+                    Ok(())
+                }
+            )+
+        };
     }
 
-    #[test]
-    fn scans_example_from_test_1() -> Result<()> {
-        assert_eq!((vec![LeftParen, Eof], 0), tokenize_str("(")?);
-
-        Ok(())
-    }
-
-    #[test]
-    fn scans_example_from_test_2() -> Result<()> {
-        assert_eq!((vec![RightParen, RightParen, Eof], 0), tokenize_str("))")?);
-
-        Ok(())
-    }
-
-    #[test]
-    fn scans_example_from_test_3() -> Result<()> {
-        assert_eq!(
-            (
-                vec![LeftParen, LeftParen, RightParen, RightParen, RightParen, Eof],
-                0
-            ),
-            tokenize_str("(()))")?
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn scans_example_from_test_4() -> Result<()> {
-        assert_eq!(
-            (
-                vec![
-                    LeftParen, RightParen, LeftParen, LeftParen, LeftParen, RightParen, RightParen,
-                    Eof
-                ],
-                0
-            ),
-            tokenize_str("()((())")?
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn scan_braces() -> Result<()> {
-        assert_eq!((vec![RightBrace, LeftBrace, Eof], 0), tokenize_str("}{")?);
-
-        Ok(())
-    }
-
-    #[test]
-    fn scan_more_single_char_tokens() -> Result<()> {
-        assert_eq!(
-            (
-                vec![
-                    LeftParen, LeftBrace, Star, Dot, Comma, Plus, Star, RightBrace, RightParen, Eof
-                ],
-                0
-            ),
-            tokenize_str("({*.,+*})")?
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn scan_with_unkown_tokens() -> Result<()> {
-        assert_eq!(
-            (vec![Comma, Dot, LeftParen, Eof], 2),
-            tokenize_str(",.$(#")?
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn scan_with_equals() -> Result<()> {
-        assert_eq!(
-            (vec![Eq, LeftBrace, EqEq, Eq, RightBrace, Eof], 0),
-            tokenize_str("={===}")?
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn scan_with_bangs() -> Result<()> {
-        assert_eq!((vec![Bang, BangEq, EqEq, Eof], 0), tokenize_str("!!===")?);
-
-        Ok(())
-    }
-
-    #[test]
-    fn scan_with_lt_gt() -> Result<()> {
-        assert_eq!((vec![Lt, LtEq, Gt, GtEq, Eof], 0), tokenize_str("<<=>>=")?);
-
-        Ok(())
-    }
-
-    #[test]
-    fn scan_with_comment() -> Result<()> {
-        assert_eq!(
-            (vec![LeftParen, RightParen, Eof], 0),
-            tokenize_str("()// Comment")?
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn scan_with_slash() -> Result<()> {
-        assert_eq!(
-            (vec![Slash, LeftParen, RightParen, Eof], 0),
-            tokenize_str("/()")?
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn scan_with_whitespace() -> Result<()> {
-        assert_eq!(
-            (vec![LeftParen, RightParen, Eof], 0),
-            tokenize_str("(\t\n )")?
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn scan_string() -> Result<()> {
-        assert_eq!(
-            (vec![String("hello".into()), Eof], 0),
-            tokenize_str("\"hello\"")?
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn scan_unclosed_string() -> Result<()> {
-        assert_eq!((vec![Eof], 1), tokenize_str("\"hello")?);
-
-        Ok(())
-    }
-
-    #[test]
-    fn scan_integer() -> Result<()> {
-        assert_eq!(
-            (vec![Number(NumberType::Integer("42".into())), Eof], 0),
-            tokenize_str("42")?
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn scan_float() -> Result<()> {
-        assert_eq!(
-            (vec![Number(NumberType::Float("1234.1234".into())), Eof], 0),
-            tokenize_str("1234.1234")?
-        );
-
-        Ok(())
+    example! {
+        scans_example_from_exercise: "(()" => (vec![LeftParen, LeftParen, RightParen, Eof], 0),
+        scans_example_from_test_1: "(" => (vec![LeftParen, Eof], 0),
+        scans_example_from_test_2: "))" => (vec![RightParen, RightParen, Eof], 0),
+        scans_example_from_test_3: "(()))" => (vec![LeftParen, LeftParen, RightParen, RightParen, RightParen, Eof], 0),
+        scans_example_from_test_4: "()((())" => (vec![LeftParen, RightParen, LeftParen, LeftParen, LeftParen, RightParen, RightParen, Eof], 0),
+        scan_braces: "}{" => (vec![RightBrace, LeftBrace, Eof], 0),
+        scan_more_single_char_tokens: "({*.,+*})" => (vec![LeftParen, LeftBrace, Star, Dot, Comma, Plus, Star, RightBrace, RightParen, Eof], 0),
+        scan_with_unkown_tokens: ",.$(#" => (vec![Comma, Dot, LeftParen, Eof], 2),
+        scan_with_equals: "={===}" => (vec![Eq, LeftBrace, EqEq, Eq, RightBrace, Eof], 0),
+        scan_with_bangs: "!!===" => (vec![Bang, BangEq, EqEq, Eof], 0),
+        scan_with_lt_gt: "<<=>>=" => (vec![Lt, LtEq, Gt, GtEq, Eof], 0),
+        scan_with_comment: "()// Comment" => (vec![LeftParen, RightParen, Eof], 0),
+        scan_with_slash: "/()" => (vec![Slash, LeftParen, RightParen, Eof], 0),
+        scan_with_whitespace: "(\t\n )" => (vec![LeftParen, RightParen, Eof], 0),
+        scan_string: "\"hello\"" => (vec![String("hello".into()), Eof], 0),
+        scan_unclosed_string: "\"hello" => (vec![Eof], 1),
+        scan_integer: "42" => (vec![Number(NumberType::Integer("42".into())), Eof], 0),
+        scan_float: "1234.1234" => (vec![Number(NumberType::Float("1234.1234".into())), Eof], 0),
     }
 }
