@@ -27,6 +27,11 @@ enum Token {
     Bang,
     BangEq,
 
+    Lt,
+    LtEq,
+    Gt,
+    GtEq,
+
     Eof,
 }
 
@@ -65,6 +70,11 @@ pub fn tokenize(args: TokenizeArgs) -> Result<()> {
 
             Bang => "BANG ! null",
             BangEq => "BANG_EQUAL != null",
+
+            Lt => "LESS < null",
+            LtEq => "LESS_EQUAL <= null",
+            Gt => "GREATER > null",
+            GtEq => "GREATER_EQUAL >= null",
 
             Eof => "EOF  null",
         };
@@ -131,6 +141,20 @@ where
                 Ok(Token::BangEq)
             }
             _ => Ok(Token::Bang),
+        },
+        Some('<') => match chars.peek() {
+            Some('=') => {
+                chars.next();
+                Ok(Token::LtEq)
+            }
+            _ => Ok(Token::Lt),
+        },
+        Some('>') => match chars.peek() {
+            Some('=') => {
+                chars.next();
+                Ok(Token::GtEq)
+            }
+            _ => Ok(Token::Gt),
         },
         Some(c) => {
             eprintln!("[line 1] Error: Unexpected character: {}", c);
@@ -243,6 +267,13 @@ mod tests {
     #[test]
     fn scan_with_bangs() -> Result<()> {
         assert_eq!((vec![Bang, BangEq, EqEq, Eof], 0), tokenize_str("!!===")?);
+
+        Ok(())
+    }
+
+    #[test]
+    fn scan_with_lt_gt() -> Result<()> {
+        assert_eq!((vec![Lt, LtEq, Gt, GtEq, Eof], 0), tokenize_str("<<=>>=")?);
 
         Ok(())
     }
