@@ -171,7 +171,7 @@ impl Token {
                 "null".to_string()
             }
             String(s) => s.clone(),
-            Number(NumberType::Float(s)) => s.clone(),
+            Number(NumberType::Float(s)) => s.parse::<f64>().unwrap_or_else(|_| unreachable!("Should always be a good float")).to_string(),
             Number(NumberType::Integer(s)) => format!("{}.0", s),
             Skip | NewLine => unreachable!("This tokens should never be linified"),
         }
