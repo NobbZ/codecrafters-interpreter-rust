@@ -42,6 +42,95 @@ impl Token {
     fn is_eof(&self) -> bool {
         self == &Token::Eof
     }
+
+    fn to_terminal(&self) -> String {
+        let token_type = self.token_type();
+        let lexeme = self.lexeme();
+        let literal = self.literal();
+
+        format!("{} {} {}", token_type, lexeme, literal)
+    }
+
+    fn token_type(&self) -> String {
+        use Token::*;
+
+        match self {
+            LeftParen => "LEFT_PAREN",
+            RightParen => "RIGHT_PAREN",
+
+            LeftBrace => "LEFT_BRACE",
+            RightBrace => "RIGHT_BRACE",
+
+            Star => "STAR",
+            Dot => "DOT",
+            Comma => "COMMA",
+            Plus => "PLUS",
+            Minus => "MINUS",
+            Semicolon => "SEMICOLON",
+            Slash => "SLASH",
+
+            Eq => "EQUAL",
+            EqEq => "EQUAL_EQUAL",
+
+            Bang => "BANG",
+            BangEq => "BANG_EQUAL",
+
+            Lt => "LESSER",
+            LtEq => "LESSER_EQUAL",
+            Gt => "GREATER",
+            GtEq => "GREATER_EQUAL",
+
+            Eof => "EOF",
+            Skip | NewLine => unreachable!("This tokens should never be linified"),
+        }
+        .to_string()
+    }
+
+    fn lexeme(&self) -> String {
+        use Token::*;
+
+        match self {
+            LeftParen => "(",
+            RightParen => ")",
+
+            LeftBrace => "{",
+            RightBrace => "}",
+
+            Star => "*",
+            Dot => ".",
+            Comma => ",",
+            Plus => "+",
+            Minus => "-",
+            Semicolon => ";",
+            Slash => "/",
+
+            Eq => "=",
+            EqEq => "==",
+
+            Bang => "!",
+            BangEq => "!=",
+
+            Lt => "<",
+            LtEq => "<=",
+            Gt => ">",
+            GtEq => ">=",
+
+            Eof => "",
+            Skip | NewLine => unreachable!("This tokens should never be linified"),
+        }
+        .to_string()
+    }
+
+    fn literal(&self) -> String {
+        use Token::*;
+
+        match self {
+            LeftParen | RightParen | LeftBrace | RightBrace | Star | Dot | Comma | Plus | Minus
+            | Semicolon | Slash | Eq | EqEq | Bang | BangEq | Lt | LtEq | Gt | GtEq | Eof => "null",
+            Skip | NewLine => unreachable!("This tokens should never be linified"),
+        }
+        .to_string()
+    }
 }
 
 pub fn tokenize(args: TokenizeArgs) -> Result<()> {
@@ -52,39 +141,7 @@ pub fn tokenize(args: TokenizeArgs) -> Result<()> {
         tokenize_str(&file_contents).with_context(|| format!("scanning {}", file_contents))?;
 
     for token in tokens.iter() {
-        use Token::*;
-
-        let str = match token {
-            LeftParen => "LEFT_PAREN ( null",
-            RightParen => "RIGHT_PAREN ) null",
-
-            LeftBrace => "LEFT_BRACE { null",
-            RightBrace => "RIGHT_BRACE } null",
-
-            Star => "STAR * null",
-            Dot => "DOT . null",
-            Comma => "COMMA , null",
-            Plus => "PLUS + null",
-            Minus => "MINUS - null",
-            Semicolon => "SEMICOLON ; null",
-            Slash => "SLASH / null",
-
-            Eq => "EQUAL = null",
-            EqEq => "EQUAL_EQUAL == null",
-
-            Bang => "BANG ! null",
-            BangEq => "BANG_EQUAL != null",
-
-            Lt => "LESS < null",
-            LtEq => "LESS_EQUAL <= null",
-            Gt => "GREATER > null",
-            GtEq => "GREATER_EQUAL >= null",
-
-            Eof => "EOF  null",
-            Skip | NewLine => unreachable!("Should never really happen"),
-        };
-
-        println!("{}", str);
+        println!("{}", token.to_terminal());
     }
 
     ensure!(err_cnt == 0);
@@ -173,7 +230,7 @@ where
             Some('/') => {
                 skip_until(chars, '\n');
                 Ok(Token::NewLine)
-            },
+            }
             _ => Ok(Token::Slash),
         },
         Some(c) => Err(c),
