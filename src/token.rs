@@ -33,6 +33,8 @@ enum Token {
     Gt,
     GtEq,
 
+    String(String),
+
     Eof,
     Skip,
     NewLine,
@@ -80,6 +82,8 @@ impl Token {
             Gt => "GREATER",
             GtEq => "GREATER_EQUAL",
 
+            String(_) => "STRING",
+
             Eof => "EOF",
             Skip | NewLine => unreachable!("This tokens should never be linified"),
         }
@@ -90,35 +94,36 @@ impl Token {
         use Token::*;
 
         match self {
-            LeftParen => "(",
-            RightParen => ")",
+            LeftParen => "(".to_string(),
+            RightParen => ")".to_string(),
 
-            LeftBrace => "{",
-            RightBrace => "}",
+            LeftBrace => "{".to_string(),
+            RightBrace => "}".to_string(),
 
-            Star => "*",
-            Dot => ".",
-            Comma => ",",
-            Plus => "+",
-            Minus => "-",
-            Semicolon => ";",
-            Slash => "/",
+            Star => "*".to_string(),
+            Dot => ".".to_string(),
+            Comma => ",".to_string(),
+            Plus => "+".to_string(),
+            Minus => "-".to_string(),
+            Semicolon => ";".to_string(),
+            Slash => "/".to_string(),
 
-            Eq => "=",
-            EqEq => "==",
+            Eq => "=".to_string(),
+            EqEq => "==".to_string(),
 
-            Bang => "!",
-            BangEq => "!=",
+            Bang => "!".to_string(),
+            BangEq => "!=".to_string(),
 
-            Lt => "<",
-            LtEq => "<=",
-            Gt => ">",
-            GtEq => ">=",
+            Lt => "<".to_string(),
+            LtEq => "<=".to_string(),
+            Gt => ">".to_string(),
+            GtEq => ">=".to_string(),
 
-            Eof => "",
+            String(s) => format!("\"{}\"", s),
+
+            Eof => "".to_string(),
             Skip | NewLine => unreachable!("This tokens should never be linified"),
         }
-        .to_string()
     }
 
     fn literal(&self) -> String {
@@ -126,10 +131,12 @@ impl Token {
 
         match self {
             LeftParen | RightParen | LeftBrace | RightBrace | Star | Dot | Comma | Plus | Minus
-            | Semicolon | Slash | Eq | EqEq | Bang | BangEq | Lt | LtEq | Gt | GtEq | Eof => "null",
+            | Semicolon | Slash | Eq | EqEq | Bang | BangEq | Lt | LtEq | Gt | GtEq | Eof => {
+                "null".to_string()
+            }
+            String(s) => s.clone(),
             Skip | NewLine => unreachable!("This tokens should never be linified"),
         }
-        .to_string()
     }
 }
 
@@ -198,6 +205,7 @@ where
         Some('+') => Ok(Token::Plus),
         Some('-') => Ok(Token::Minus),
         Some(';') => Ok(Token::Semicolon),
+        Some('"') => scan_string(chars),
         Some('=') => match chars.peek() {
             Some('=') => {
                 chars.next();
@@ -247,6 +255,22 @@ where
             break;
         }
     }
+}
+
+fn scan_string<I>(chars: &mut Peekable<I>) -> Result<Token, char>
+where
+    I: Iterator<Item = char>,
+{
+    let mut string = String::new();
+
+    for c in chars {
+        if c == '"' {
+            break;
+        }
+        string.push(c);
+    }
+
+    Ok(Token::String(string))
 }
 
 #[cfg(test)]
@@ -388,6 +412,16 @@ mod tests {
         assert_eq!(
             (vec![LeftParen, RightParen, Eof], 0),
             tokenize_str("(\t\n )")?
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn scan_string() -> Result<()> {
+        assert_eq!(
+            (vec![String("hello".into()), Eof], 0),
+            tokenize_str("\"hello\"")?
         );
 
         Ok(())
