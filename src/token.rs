@@ -1,10 +1,24 @@
-use std::fs;
 use std::iter::Peekable;
 use std::{char, fmt::Debug};
+use std::{fmt, fs};
 
 use anyhow::{ensure, Context, Result};
 
 use crate::TokenizeArgs;
+
+enum TokenError {
+    UnexpectedCharacter(char),
+    UnterminatedString,
+}
+
+impl fmt::Display for TokenError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnexpectedCharacter(c) => write!(f, "Unexpected character: {}", c),
+            Self::UnterminatedString => write!(f, "Unterminated string."),
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 enum Token {
@@ -178,8 +192,8 @@ where
                     break;
                 };
             }
-            Err(c) => {
-                eprintln!("[line {}] Error: Unexpected character: {}", line, c);
+            Err(te) => {
+                eprintln!("[line {}] Error: {}", line, te);
                 err_cnt += 1;
             }
         }
@@ -188,7 +202,7 @@ where
     Ok((result, err_cnt))
 }
 
-fn next_token<I>(chars: &mut Peekable<I>) -> Result<Token, char>
+fn next_token<I>(chars: &mut Peekable<I>) -> Result<Token, TokenError>
 where
     I: Iterator<Item = char>,
 {
@@ -241,7 +255,7 @@ where
             }
             _ => Ok(Token::Slash),
         },
-        Some(c) => Err(c),
+        Some(c) => Err(TokenError::UnexpectedCharacter(c)),
         None => Ok(Token::Eof),
     }
 }
@@ -257,7 +271,7 @@ where
     }
 }
 
-fn scan_string<I>(chars: &mut Peekable<I>) -> Result<Token, char>
+fn scan_string<I>(chars: &mut Peekable<I>) -> Result<Token, TokenError>
 where
     I: Iterator<Item = char>,
 {
@@ -270,7 +284,7 @@ where
         string.push(c);
     }
 
-    Err(' ')
+    Err(TokenError::UnterminatedString)
 }
 
 #[cfg(test)]
