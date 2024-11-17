@@ -20,6 +20,7 @@ enum Token {
     Plus,
     Minus,
     Semicolon,
+    Slash,
 
     Eq,
     EqEq,
@@ -64,6 +65,7 @@ pub fn tokenize(args: TokenizeArgs) -> Result<()> {
             Plus => "PLUS + null",
             Minus => "MINUS - null",
             Semicolon => "SEMICOLON ; null",
+            Slash => "SLASH / null",
 
             Eq => "EQUAL = null",
             EqEq => "EQUAL_EQUAL == null",
@@ -155,6 +157,19 @@ where
                 Ok(Token::GtEq)
             }
             _ => Ok(Token::Gt),
+        },
+        Some('/') => match chars.peek() {
+            Some('/') => {
+                loop {
+                    let c = chars.next();
+                    if c == Some('\n') || c.is_none() {
+                        break;
+                    };
+                }
+
+                next_token(chars)
+            }
+            _ => Ok(Token::Slash),
         },
         Some(c) => {
             eprintln!("[line 1] Error: Unexpected character: {}", c);
@@ -274,6 +289,26 @@ mod tests {
     #[test]
     fn scan_with_lt_gt() -> Result<()> {
         assert_eq!((vec![Lt, LtEq, Gt, GtEq, Eof], 0), tokenize_str("<<=>>=")?);
+
+        Ok(())
+    }
+
+    #[test]
+    fn scan_with_comment() -> Result<()> {
+        assert_eq!(
+            (vec![LeftParen, RightParen, Eof], 0),
+            tokenize_str("()// Comment")?
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn scan_with_slash() -> Result<()> {
+        assert_eq!(
+            (vec![Slash, LeftParen, RightParen, Eof], 0),
+            tokenize_str("/()")?
+        );
 
         Ok(())
     }
