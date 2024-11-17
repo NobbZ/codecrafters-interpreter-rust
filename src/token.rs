@@ -1,11 +1,12 @@
-use std::fmt::Debug;
 use std::fs;
+use std::iter::Peekable;
+use std::{char, fmt::Debug};
 
-use anyhow::{ensure, Context, Ok, Result};
+use anyhow::{ensure, Context, Result};
 
 use crate::TokenizeArgs;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum Token {
     LeftParen,
     RightParen,
@@ -20,7 +21,16 @@ enum Token {
     Minus,
     Semicolon,
 
+    Eq,
+    EqEq,
+
     Eof,
+}
+
+impl Token {
+    fn is_eof(&self) -> bool {
+        self == &Token::Eof
+    }
 }
 
 pub fn tokenize(args: TokenizeArgs) -> Result<()> {
@@ -45,6 +55,9 @@ pub fn tokenize(args: TokenizeArgs) -> Result<()> {
             Token::Minus => "MINUS - null",
             Token::Semicolon => "SEMICOLON ; null",
 
+            Token::Eq => "EQUAL = null",
+            Token::EqEq => "EQUAL_EQUAL == null",
+
             Token::Eof => "EOF  null",
         };
 
@@ -63,28 +76,51 @@ where
     let mut result = Vec::new();
     let mut err_cnt: usize = 0;
 
-    for c in s.as_ref().chars() {
-        match c {
-            '(' => result.push(Token::LeftParen),
-            ')' => result.push(Token::RightParen),
-            '{' => result.push(Token::LeftBrace),
-            '}' => result.push(Token::RightBrace),
-            '*' => result.push(Token::Star),
-            '.' => result.push(Token::Dot),
-            ',' => result.push(Token::Comma),
-            '+' => result.push(Token::Plus),
-            '-' => result.push(Token::Minus),
-            ';' => result.push(Token::Semicolon),
-            _ => {
-                eprintln!("[line 1] Error: Unexpected character: {}", c);
-                err_cnt += 1;
-            }
+    let mut chars = s.as_ref().chars().peekable();
+
+    loop {
+        match next_token(&mut chars) {
+            Ok(token) => {
+                result.push(token.clone());
+                if token.is_eof() {
+                    break;
+                };
+            },
+            Err(_) => {err_cnt += 1;},
         }
     }
 
-    result.push(Token::Eof);
-
     Ok((result, err_cnt))
+}
+
+fn next_token<I>(chars: &mut Peekable<I>) -> Result<Token, char>
+where
+    I: Iterator<Item = char>,
+{
+    match chars.next() {
+        Some('(') => Ok(Token::LeftParen),
+        Some(')') => Ok(Token::RightParen),
+        Some('{') => Ok(Token::LeftBrace),
+        Some('}') => Ok(Token::RightBrace),
+        Some('*') => Ok(Token::Star),
+        Some('.') => Ok(Token::Dot),
+        Some(',') => Ok(Token::Comma),
+        Some('+') => Ok(Token::Plus),
+        Some('-') => Ok(Token::Minus),
+        Some(';') => Ok(Token::Semicolon),
+        Some('=') => match chars.peek() {
+            Some('=') => {
+                chars.next();
+                Ok(Token::EqEq)
+            }
+            _ => Ok(Token::Eq),
+        },
+        Some(c) => {
+            eprintln!("[line 1] Error: Unexpected character: {}", c);
+            Err(c)
+        }
+        None => Ok(Token::Eof),
+    }
 }
 
 #[cfg(test)]
@@ -173,6 +209,13 @@ mod tests {
             (vec![Comma, Dot, LeftParen, Eof], 2),
             tokenize_str(",.$(#")?
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn scan_with_equals() -> Result<()> {
+        assert_eq!((vec![Eq, LeftBrace, EqEq, Eq, RightBrace, Eof], 0), tokenize_str("={===}")?);
 
         Ok(())
     }
