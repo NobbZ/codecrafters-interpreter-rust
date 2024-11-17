@@ -24,6 +24,9 @@ enum Token {
     Eq,
     EqEq,
 
+    Bang,
+    BangEq,
+
     Eof,
 }
 
@@ -41,24 +44,29 @@ pub fn tokenize(args: TokenizeArgs) -> Result<()> {
         tokenize_str(&file_contents).with_context(|| format!("scanning {}", file_contents))?;
 
     for token in tokens.iter() {
+        use Token::*;
+
         let str = match token {
-            Token::LeftParen => "LEFT_PAREN ( null",
-            Token::RightParen => "RIGHT_PAREN ) null",
+            LeftParen => "LEFT_PAREN ( null",
+            RightParen => "RIGHT_PAREN ) null",
 
-            Token::LeftBrace => "LEFT_BRACE { null",
-            Token::RightBrace => "RIGHT_BRACE } null",
+            LeftBrace => "LEFT_BRACE { null",
+            RightBrace => "RIGHT_BRACE } null",
 
-            Token::Star => "STAR * null",
-            Token::Dot => "DOT . null",
-            Token::Comma => "COMMA , null",
-            Token::Plus => "PLUS + null",
-            Token::Minus => "MINUS - null",
-            Token::Semicolon => "SEMICOLON ; null",
+            Star => "STAR * null",
+            Dot => "DOT . null",
+            Comma => "COMMA , null",
+            Plus => "PLUS + null",
+            Minus => "MINUS - null",
+            Semicolon => "SEMICOLON ; null",
 
-            Token::Eq => "EQUAL = null",
-            Token::EqEq => "EQUAL_EQUAL == null",
+            Eq => "EQUAL = null",
+            EqEq => "EQUAL_EQUAL == null",
 
-            Token::Eof => "EOF  null",
+            Bang => "BANG ! null",
+            BangEq => "BANG_EQUAL != null",
+
+            Eof => "EOF  null",
         };
 
         println!("{}", str);
@@ -85,8 +93,10 @@ where
                 if token.is_eof() {
                     break;
                 };
-            },
-            Err(_) => {err_cnt += 1;},
+            }
+            Err(_) => {
+                err_cnt += 1;
+            }
         }
     }
 
@@ -114,6 +124,13 @@ where
                 Ok(Token::EqEq)
             }
             _ => Ok(Token::Eq),
+        },
+        Some('!') => match chars.peek() {
+            Some('=') => {
+                chars.next();
+                Ok(Token::BangEq)
+            }
+            _ => Ok(Token::Bang),
         },
         Some(c) => {
             eprintln!("[line 1] Error: Unexpected character: {}", c);
@@ -215,7 +232,17 @@ mod tests {
 
     #[test]
     fn scan_with_equals() -> Result<()> {
-        assert_eq!((vec![Eq, LeftBrace, EqEq, Eq, RightBrace, Eof], 0), tokenize_str("={===}")?);
+        assert_eq!(
+            (vec![Eq, LeftBrace, EqEq, Eq, RightBrace, Eof], 0),
+            tokenize_str("={===}")?
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn scan_with_bangs() -> Result<()> {
+        assert_eq!((vec![Bang, BangEq, EqEq, Eof], 0), tokenize_str("!!===")?);
 
         Ok(())
     }
