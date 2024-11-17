@@ -177,9 +177,8 @@ fn skip_until<I>(chars: &mut Peekable<I>, last: char)
 where
     I: Iterator<Item = char>,
 {
-    loop {
-        let maybe_char = chars.next();
-        if maybe_char == Some(last) || maybe_char.is_none() {
+    for c in chars {
+        if c == last {
             break;
         }
     }
