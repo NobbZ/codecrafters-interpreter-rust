@@ -160,13 +160,7 @@ where
         },
         Some('/') => match chars.peek() {
             Some('/') => {
-                loop {
-                    let c = chars.next();
-                    if c == Some('\n') || c.is_none() {
-                        break;
-                    };
-                }
-
+                skip_until(chars, '\n');
                 next_token(chars)
             }
             _ => Ok(Token::Slash),
@@ -176,6 +170,18 @@ where
             Err(c)
         }
         None => Ok(Token::Eof),
+    }
+}
+
+fn skip_until<I>(chars: &mut Peekable<I>, last: char)
+where
+    I: Iterator<Item = char>,
+{
+    loop {
+        let maybe_char = chars.next();
+        if maybe_char == Some(last) || maybe_char.is_none() {
+            break;
+        }
     }
 }
 
