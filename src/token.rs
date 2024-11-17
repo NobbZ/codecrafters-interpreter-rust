@@ -172,8 +172,8 @@ where
         Some('/') => match chars.peek() {
             Some('/') => {
                 skip_until(chars, '\n');
-                next_token(chars)
-            }
+                Ok(Token::NewLine)
+            },
             _ => Ok(Token::Slash),
         },
         Some(c) => Err(c),
