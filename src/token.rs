@@ -120,6 +120,7 @@ where
     I: Iterator<Item = char>,
 {
     match chars.next() {
+        Some(' ' | '\n' | '\t') => next_token(chars),
         Some('(') => Ok(Token::LeftParen),
         Some(')') => Ok(Token::RightParen),
         Some('{') => Ok(Token::LeftBrace),
@@ -313,6 +314,16 @@ mod tests {
         assert_eq!(
             (vec![Slash, LeftParen, RightParen, Eof], 0),
             tokenize_str("/()")?
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn scan_with_whitespace() -> Result<()> {
+        assert_eq!(
+            (vec![LeftParen, RightParen, Eof], 0),
+            tokenize_str("(\t\n )")?
         );
 
         Ok(())
