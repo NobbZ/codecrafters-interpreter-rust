@@ -265,12 +265,12 @@ where
 
     for c in chars {
         if c == '"' {
-            break;
+            return Ok(Token::String(string));
         }
         string.push(c);
     }
 
-    Ok(Token::String(string))
+    Err(' ')
 }
 
 #[cfg(test)]
@@ -423,6 +423,13 @@ mod tests {
             (vec![String("hello".into()), Eof], 0),
             tokenize_str("\"hello\"")?
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn scan_unclosed_string() -> Result<()> {
+        assert_eq!((vec![Eof], 1), tokenize_str("\"hello")?);
 
         Ok(())
     }
