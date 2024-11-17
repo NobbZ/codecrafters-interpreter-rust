@@ -91,8 +91,8 @@ impl Token {
             Bang => "BANG",
             BangEq => "BANG_EQUAL",
 
-            Lt => "LESSER",
-            LtEq => "LESSER_EQUAL",
+            Lt => "LESS",
+            LtEq => "LESS_EQUAL",
             Gt => "GREATER",
             GtEq => "GREATER_EQUAL",
 
