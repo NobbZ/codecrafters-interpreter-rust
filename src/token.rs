@@ -21,6 +21,24 @@ impl fmt::Display for TokenError {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+enum NumberType {
+    Integer(String),
+    Float(String),
+}
+
+impl NumberType {
+    fn new<S>(s: S, float: bool) -> Self
+    where
+        S: Into<String>,
+    {
+        match float {
+            true => Self::Float(s.into()),
+            false => Self::Integer(s.into()),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum Token {
     LeftParen,
     RightParen,
@@ -48,6 +66,7 @@ enum Token {
     GtEq,
 
     String(String),
+    Number(NumberType),
 
     Eof,
     Skip,
@@ -97,6 +116,7 @@ impl Token {
             GtEq => "GREATER_EQUAL",
 
             String(_) => "STRING",
+            Number(_) => "NUMBER",
 
             Eof => "EOF",
             Skip | NewLine => unreachable!("This tokens should never be linified"),
@@ -134,6 +154,8 @@ impl Token {
             GtEq => ">=".to_string(),
 
             String(s) => format!("\"{}\"", s),
+            Number(NumberType::Float(s)) => s.clone(),
+            Number(NumberType::Integer(s)) => s.clone(),
 
             Eof => "".to_string(),
             Skip | NewLine => unreachable!("This tokens should never be linified"),
@@ -149,6 +171,8 @@ impl Token {
                 "null".to_string()
             }
             String(s) => s.clone(),
+            Number(NumberType::Float(s)) => s.clone(),
+            Number(NumberType::Integer(s)) => format!("{}.0", s),
             Skip | NewLine => unreachable!("This tokens should never be linified"),
         }
     }
@@ -255,6 +279,7 @@ where
             }
             _ => Ok(Token::Slash),
         },
+        Some(d) if d.is_ascii_digit() => scan_number(chars, d),
         Some(c) => Err(TokenError::UnexpectedCharacter(c)),
         None => Ok(Token::Eof),
     }
@@ -285,6 +310,35 @@ where
     }
 
     Err(TokenError::UnterminatedString)
+}
+
+fn scan_number<I>(chars: &mut Peekable<I>, d: char) -> Result<Token, TokenError>
+where
+    I: Iterator<Item = char>,
+{
+    let mut string = d.to_string();
+    let mut float = false;
+
+    loop {
+        match &chars.peek() {
+            None => {
+                chars.next();
+                return Ok(Token::Number(NumberType::new(string, float)));
+            }
+            Some(d) if d.is_ascii_digit() => {
+                let Some(d) = chars.next() else {
+                    unreachable!("chars.next must return a some, guaranteed by prev. peek")
+                };
+                string.push(d);
+            }
+            Some('.') if !float => {
+                chars.next();
+                float = true;
+                string.push('.');
+            }
+            Some(_c) => return Ok(Token::Number(NumberType::new(string, float))),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -444,6 +498,26 @@ mod tests {
     #[test]
     fn scan_unclosed_string() -> Result<()> {
         assert_eq!((vec![Eof], 1), tokenize_str("\"hello")?);
+
+        Ok(())
+    }
+
+    #[test]
+    fn scan_integer() -> Result<()> {
+        assert_eq!(
+            (vec![Number(NumberType::Integer("42".into())), Eof], 0),
+            tokenize_str("42")?
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn scan_float() -> Result<()> {
+        assert_eq!(
+            (vec![Number(NumberType::Float("1234.1234".into())), Eof], 0),
+            tokenize_str("1234.1234")?
+        );
 
         Ok(())
     }
