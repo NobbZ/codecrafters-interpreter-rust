@@ -1,5 +1,6 @@
 mod interface;
 mod token;
+mod token_stream;
 
 use std::process::ExitCode;
 
