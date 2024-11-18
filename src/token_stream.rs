@@ -1,4 +1,4 @@
-use std::{iter::Peekable};
+use std::iter::Peekable;
 
 use crate::token::{NumberType, Token, TokenError};
 
