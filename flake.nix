@@ -23,7 +23,7 @@
         devShells.default = pkgs.mkShell {
           packages = builtins.attrValues {
             inherit (pkgs) cargo-nextest cargo-audit cargo-deny cargo-tarpaulin rust-analyzer;
-            inherit (pkgs) nil pre-commit reuse;
+            inherit (pkgs) nil pre-commit reuse codecrafters-cli;
             inherit (pkgs) watchexec;
             inherit rust;
           };
