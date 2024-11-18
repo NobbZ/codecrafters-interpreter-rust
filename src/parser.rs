@@ -1,10 +1,31 @@
 use std::path::Path;
 use std::{fmt::Display, fs, iter::Peekable};
 
-use crate::{token::Token, token_stream::TokenStream};
+use crate::{token::{Token, NumberType}, token_stream::TokenStream};
+
+pub(crate) enum Number {
+    Int(i64),
+    Float(f64),
+}
+
+impl Display for Number {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Number::Int(i) => i.to_string(),
+            Number::Float(f) => f.to_string(),
+        };
+
+        if s.contains('.') {
+            write!(f, "{}", s)
+        } else {
+            write!(f, "{}.0", s)
+        }
+    }
+}
 
 pub(crate) enum Expr {
     Bool(bool),
+    Number(Number),
     Nil,
 }
 
@@ -12,6 +33,7 @@ impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Bool(b) => write!(f, "{}", b),
+            Self::Number(n) => write!(f, "{}", n),
             Self::Nil => write!(f, "nil"),
         }
     }
@@ -41,6 +63,8 @@ where
             let expr = match token {
                 Token::True => anyhow::Ok(Expr::Bool(true)),
                 Token::False => Ok(Expr::Bool(false)),
+                Token::Number(NumberType::Integer(i)) => Ok(Expr::Number(Number::Int(i.parse().unwrap()))),
+                Token::Number(NumberType::Float(f)) => Ok(Expr::Number(Number::Float(f.parse().unwrap()))),
                 Token::Nil => Ok(Expr::Nil),
                 Token::Eof => return Ok(exprs),
                 _ => unimplemented!(),
@@ -68,4 +92,3 @@ pub fn parse_file(file: impl AsRef<Path>) -> anyhow::Result<()> {
 
     Ok(())
 }
-
