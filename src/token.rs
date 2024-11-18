@@ -6,9 +6,12 @@ use anyhow::{ensure, Context, Result};
 use crate::token_stream::TokenStream;
 use crate::TokenizeArgs;
 
+/// Describes the various errors that can occur during tokenisation
 #[derive(Debug, Clone, Copy)]
 pub enum TokenError {
+    /// The tokenizer does not know how to deal with a certain character at the current location.
     UnexpectedCharacter(char),
+    /// The tokenizer found an unterminated string
     UnterminatedString,
 }
 
@@ -23,11 +26,18 @@ impl fmt::Display for TokenError {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub(crate) enum NumberType {
+    /// Represents integral number tokens
     Integer(String),
+
+    /// Represents floating point number tokens
     Float(String),
 }
 
 impl NumberType {
+    /// Create a new number type based on the passed in `s` and `float`.
+    ///
+    /// Returns `NumberType::Integer(s)` when `float` is `false`, `NumberType::Float(s)`
+    /// otherwise.
     pub(crate) fn new<S>(s: S, float: bool) -> Self
     where
         S: Into<String>,
