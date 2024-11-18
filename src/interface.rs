@@ -10,13 +10,23 @@ pub struct InterpreterParser {
 
 #[derive(Subcommand, Debug)]
 pub enum InterpreterCommand {
-    /// Tokenizes a given fule and prints out the tokens
-   Tokenize(TokenizeArgs),
+    /// Tokenizes a given file and prints out the tokens
+    Tokenize(TokenizeArgs),
+
+    /// Parses a given file and prints out its representation
+    Parse(ParseArgs),
 }
 
 #[derive(Args, Debug)]
 pub struct TokenizeArgs {
     /// File to tokenize
+    #[arg()]
+    pub file: PathBuf,
+}
+
+#[derive(Args, Debug)]
+pub struct ParseArgs {
+    /// File to parse
     #[arg()]
     pub file: PathBuf,
 }
