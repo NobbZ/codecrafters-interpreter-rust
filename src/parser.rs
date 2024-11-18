@@ -26,6 +26,7 @@ impl Display for Number {
 pub(crate) enum Expr {
     Bool(bool),
     Number(Number),
+    String(String),
     Nil,
 }
 
@@ -34,6 +35,7 @@ impl Display for Expr {
         match self {
             Self::Bool(b) => write!(f, "{}", b),
             Self::Number(n) => write!(f, "{}", n),
+            Self::String(s) => write!(f, "{}", s),
             Self::Nil => write!(f, "nil"),
         }
     }
@@ -65,6 +67,7 @@ where
                 Token::False => Ok(Expr::Bool(false)),
                 Token::Number(NumberType::Integer(i)) => Ok(Expr::Number(Number::Int(i.parse().unwrap()))),
                 Token::Number(NumberType::Float(f)) => Ok(Expr::Number(Number::Float(f.parse().unwrap()))),
+                Token::String(s) => Ok(Expr::String(s.clone())),
                 Token::Nil => Ok(Expr::Nil),
                 Token::Eof => return Ok(exprs),
                 _ => unimplemented!(),
