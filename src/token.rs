@@ -69,6 +69,23 @@ enum Token {
     Number(NumberType),
     Ident(String),
 
+    And,
+    Class,
+    Else,
+    False,
+    For,
+    Fun,
+    If,
+    Nil,
+    Or,
+    Print,
+    Return,
+    Super,
+    This,
+    True,
+    Var,
+    While,
+
     Eof,
     Skip,
     NewLine,
@@ -120,6 +137,23 @@ impl Token {
             Number(_) => "NUMBER",
             Ident(_) => "IDENTIFIER",
 
+            And => "AND",
+            Class => "CLASS",
+            Else => "ELSE",
+            False => "FALSE",
+            For => "FOR",
+            Fun => "FUN",
+            If => "IF",
+            Nil => "NIL",
+            Or => "OR",
+            Print => "PRINT",
+            Return => "RETURN",
+            Super => "SUPER",
+            This => "THIS",
+            True => "TRUE",
+            Var => "VAR",
+            While => "WHILE",
+
             Eof => "EOF",
             Skip | NewLine => unreachable!("This tokens should never be linified"),
         }
@@ -160,6 +194,23 @@ impl Token {
             Number(NumberType::Integer(s)) => s.clone(),
             Ident(s) => s.clone(),
 
+            And => "and".to_string(),
+            Class => "class".to_string(),
+            Else => "else".to_string(),
+            False => "false".to_string(),
+            For => "for".to_string(),
+            Fun => "fun".to_string(),
+            If => "if".to_string(),
+            Nil => "nil".to_string(),
+            Or => "or".to_string(),
+            Print => "print".to_string(),
+            Return => "return".to_string(),
+            Super => "super".to_string(),
+            This => "this".to_string(),
+            True => "true".to_string(),
+            Var => "var".to_string(),
+            While => "while".to_string(),
+
             Eof => "".to_string(),
             Skip | NewLine => unreachable!("This tokens should never be linified"),
         }
@@ -171,7 +222,8 @@ impl Token {
         match self {
             LeftParen | RightParen | LeftBrace | RightBrace | Star | Dot | Comma | Plus | Minus
             | Semicolon | Slash | Eq | EqEq | Bang | BangEq | Lt | LtEq | Gt | GtEq | Ident(_)
-            | Eof => "null".to_string(),
+            | And | Class | Else | False | For | Fun | If | Nil | Or | Print | Return
+            | Super | This | True | Var | While | Eof => "null".to_string(),
             String(s) => s.clone(),
             Number(NumberType::Float(s)) => {
                 let f = s
@@ -358,22 +410,44 @@ fn scan_ident<I>(chars: &mut Peekable<I>, c: char) -> Result<Token, TokenError>
 where
     I: Iterator<Item = char>,
 {
-    let mut strings = c.to_string();
+    let mut string = c.to_string();
 
     loop {
         match &chars.peek() {
             None => {
                 chars.next();
-                return Ok(Token::Ident(strings));
+                return decide_reserved(string);
             }
             Some(c) if c.is_ascii_alphabetic() || c.is_ascii_digit() || c == &&'_' => {
                 let Some(c) = chars.next() else {
                     unreachable!("chars.next must return a some, guaranteed by prev. peek")
                 };
-                strings.push(c);
+                string.push(c);
             }
-            Some(_c) => return Ok(Token::Ident(strings)),
+            Some(_c) => return decide_reserved(string),
         }
+    }
+}
+
+fn decide_reserved<S>(canditate: S) -> Result<Token, TokenError> where S: AsRef<str> {
+    match canditate.as_ref() {
+        "and" => Ok(Token::And),
+        "class" => Ok(Token::Class),
+        "else" => Ok(Token::Else),
+        "false" => Ok(Token::False),
+        "for" => Ok(Token::For),
+        "fun" => Ok(Token::Fun),
+        "if" => Ok(Token::If),
+        "nil" => Ok(Token::Nil),
+        "or" => Ok(Token::Or),
+        "print" => Ok(Token::Print),
+        "return" => Ok(Token::Return),
+        "super" => Ok(Token::Super),
+        "this" => Ok(Token::This),
+        "true" => Ok(Token::True),
+        "var" => Ok(Token::Var),
+        "while" => Ok(Token::While),
+        ident => Ok(Token::Ident(ident.to_string())),
     }
 }
 
@@ -414,5 +488,6 @@ mod tests {
         scan_integer: "42" => (vec![Number(NumberType::Integer("42".into())), Eof], 0),
         scan_float: "1234.1234" => (vec![Number(NumberType::Float("1234.1234".into())), Eof], 0),
         scan_ident: "foo bar _hello" => (vec![Ident("foo".into()), Ident("bar".into()), Ident("_hello".into()), Eof], 0),
+        scan_reserved: "and" => (vec![And, Eof], 0),
     }
 }
