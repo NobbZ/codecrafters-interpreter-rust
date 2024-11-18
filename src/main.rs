@@ -1,4 +1,5 @@
 mod interface;
+mod parser;
 mod token;
 mod token_stream;
 
@@ -13,7 +14,7 @@ fn main() -> ExitCode {
 
     let ec = match args.command {
         Tokenize(tok_args) => token::tokenize(tok_args).map_or(65, |_| 0),
-        Parse(parse_args) => unimplemented!("parsing is not yet implemented, but got called with {:?}", parse_args),
+        Parse(parse_args) => parser::parse_file(parse_args.file).map_or(65, |_| 0),
     };
 
     ExitCode::from(ec)
