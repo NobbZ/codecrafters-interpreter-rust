@@ -67,6 +67,7 @@ enum Token {
 
     String(String),
     Number(NumberType),
+    Ident(String),
 
     Eof,
     Skip,
@@ -117,6 +118,7 @@ impl Token {
 
             String(_) => "STRING",
             Number(_) => "NUMBER",
+            Ident(_) => "IDENTIFIER",
 
             Eof => "EOF",
             Skip | NewLine => unreachable!("This tokens should never be linified"),
@@ -156,6 +158,7 @@ impl Token {
             String(s) => format!("\"{}\"", s),
             Number(NumberType::Float(s)) => s.clone(),
             Number(NumberType::Integer(s)) => s.clone(),
+            Ident(s) => s.clone(),
 
             Eof => "".to_string(),
             Skip | NewLine => unreachable!("This tokens should never be linified"),
@@ -167,9 +170,8 @@ impl Token {
 
         match self {
             LeftParen | RightParen | LeftBrace | RightBrace | Star | Dot | Comma | Plus | Minus
-            | Semicolon | Slash | Eq | EqEq | Bang | BangEq | Lt | LtEq | Gt | GtEq | Eof => {
-                "null".to_string()
-            }
+            | Semicolon | Slash | Eq | EqEq | Bang | BangEq | Lt | LtEq | Gt | GtEq | Ident(_)
+            | Eof => "null".to_string(),
             String(s) => s.clone(),
             Number(NumberType::Float(s)) => {
                 let f = s
@@ -290,6 +292,7 @@ where
             _ => Ok(Token::Slash),
         },
         Some(d) if d.is_ascii_digit() => scan_number(chars, d),
+        Some(c) if c.is_ascii_alphabetic() || c == '_' => scan_ident(chars, c),
         Some(c) => Err(TokenError::UnexpectedCharacter(c)),
         None => Ok(Token::Eof),
     }
@@ -351,6 +354,29 @@ where
     }
 }
 
+fn scan_ident<I>(chars: &mut Peekable<I>, c: char) -> Result<Token, TokenError>
+where
+    I: Iterator<Item = char>,
+{
+    let mut strings = c.to_string();
+
+    loop {
+        match &chars.peek() {
+            None => {
+                chars.next();
+                return Ok(Token::Ident(strings));
+            }
+            Some(c) if c.is_ascii_alphabetic() || c.is_ascii_digit() || c == &&'_' => {
+                let Some(c) = chars.next() else {
+                    unreachable!("chars.next must return a some, guaranteed by prev. peek")
+                };
+                strings.push(c);
+            }
+            Some(_c) => return Ok(Token::Ident(strings)),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Token::*;
@@ -387,5 +413,6 @@ mod tests {
         scan_unclosed_string: "\"hello" => (vec![Eof], 1),
         scan_integer: "42" => (vec![Number(NumberType::Integer("42".into())), Eof], 0),
         scan_float: "1234.1234" => (vec![Number(NumberType::Float("1234.1234".into())), Eof], 0),
+        scan_ident: "foo bar _hello" => (vec![Ident("foo".into()), Ident("bar".into()), Ident("_hello".into()), Eof], 0),
     }
 }
