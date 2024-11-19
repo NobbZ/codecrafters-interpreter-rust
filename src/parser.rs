@@ -36,6 +36,8 @@ pub(crate) enum Expr {
     String(String),
     Nil,
     Group(Box<Expr>),
+    Not(Box<Expr>),
+    Neg(Box<Expr>),
 }
 
 impl Display for Expr {
@@ -46,6 +48,8 @@ impl Display for Expr {
             Self::String(s) => write!(f, "{}", s),
             Self::Nil => write!(f, "nil"),
             Self::Group(e) => write!(f, "(group {})", e),
+            Self::Not(e) => write!(f, "(! {})", e),
+            Self::Neg(e) => write!(f, "(- {})", e),
         }
     }
 }
@@ -89,6 +93,16 @@ where
             Some(Number(NT::Float(f))) => Some(Ok(Expr::Number(N::Float(f.parse().unwrap())))),
             Some(String(s)) => Some(Ok(Expr::String(s.clone()))),
             Some(Nil) => Some(Ok(Expr::Nil)),
+            Some(Bang) => match self.parse_next() {
+                Some(Ok(expr)) => Some(Ok(Expr::Not(Box::new(expr)))),
+                err @ Some(Err(_)) => err,
+                None => Some(Err(anyhow!("expression expected"))),
+            },
+            Some(Minus) => match self.parse_next() {
+                Some(Ok(expr)) => Some(Ok(Expr::Neg(Box::new(expr)))),
+                err @ Some(Err(_)) => err,
+                None => Some(Err(anyhow!("expression expected"))),
+            },
             Some(LeftParen) => match self.parse_next() {
                 Some(Ok(expr)) => {
                     if let Some(RightParen) = self.tokens.next() {
