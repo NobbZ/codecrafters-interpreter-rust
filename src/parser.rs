@@ -250,6 +250,14 @@ mod tests {
         group: [Token::LeftParen, Token::Nil, Token::RightParen, Token::Eof] => Ok(Expr::Group(Box::new(Expr::Nil))),
         multiply: [Token::Number(NT::Integer("1".to_string())), Token::Star, Token::Number(NT::Integer("1".to_string())), Token::Eof] => Ok(Expr::Binary(Op::Mul, Box::new(Expr::Number(Number::Int(1))), Box::new(Expr::Number(Number::Int(1))))),
         divide: [Token::Number(NT::Integer("1".to_string())), Token::Slash, Token::Number(NT::Integer("1".to_string())), Token::Eof] => Ok(Expr::Binary(Op::Div, Box::new(Expr::Number(Number::Int(1))), Box::new(Expr::Number(Number::Int(1))))),
+        
+        mixed: [
+            Token::Number(NT::Integer("23".into())),
+            Token::Star,
+            Token::Number(NT::Integer("65".into())),
+            Token::Slash,
+            Token::Number(NT::Integer("68".into())),
+        ] => Ok(Expr::Binary(Op::Div, Box::new(Expr::Binary(Op::Mul, Box::new(Expr::Number(Number::Int(23))), Box::new(Expr::Number(Number::Int(65))))), Box::new(Expr::Number(Number::Int(68))))),
 
         unbalanced: [Token::LeftParen, Token::False, Token::False, Token::Eof] => Err(ParseError::UnbalancedDelims(Delim::Parenthesis)),
     }
