@@ -93,16 +93,8 @@ where
             Some(Number(NT::Float(f))) => Some(Ok(Expr::Number(N::Float(f.parse().unwrap())))),
             Some(String(s)) => Some(Ok(Expr::String(s.clone()))),
             Some(Nil) => Some(Ok(Expr::Nil)),
-            Some(Bang) => match self.parse_next() {
-                Some(Ok(expr)) => Some(Ok(Expr::Not(Box::new(expr)))),
-                err @ Some(Err(_)) => err,
-                None => Some(Err(anyhow!("expression expected"))),
-            },
-            Some(Minus) => match self.parse_next() {
-                Some(Ok(expr)) => Some(Ok(Expr::Neg(Box::new(expr)))),
-                err @ Some(Err(_)) => err,
-                None => Some(Err(anyhow!("expression expected"))),
-            },
+            Some(Bang) => self.parse_unary(Expr::Not),
+            Some(Minus) => self.parse_unary(Expr::Neg),
             Some(LeftParen) => match self.parse_next() {
                 Some(Ok(expr)) => {
                     if let Some(RightParen) = self.tokens.next() {
@@ -116,6 +108,17 @@ where
             },
             Some(Eof) => None,
             _ => unimplemented!(),
+        }
+    }
+
+    fn parse_unary<C>(&mut self, constructor: C) -> Option<anyhow::Result<Expr>>
+    where
+        C: Fn(Box<Expr>) -> Expr,
+    {
+        match self.parse_next() {
+            Some(Ok(expr)) => Some(Ok(constructor(Box::new(expr)))),
+            err @ Some(Err(_)) => err,
+            None => Some(Err(anyhow!("expression expected"))),
         }
     }
 }
