@@ -6,7 +6,7 @@ use crate::{
     token_stream::TokenStream,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Number {
     Int(i64),
     Float(f64),
@@ -27,7 +27,7 @@ impl Display for Number {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Expr {
     Bool(bool),
     Number(Number),
@@ -52,7 +52,7 @@ impl Display for Expr {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Delim {
     Parenthesis,
 }
@@ -67,7 +67,7 @@ impl std::fmt::Display for Delim {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) enum ParseError {
     UnbalancedDelims(Delim),
     UnexpectedEof,
@@ -171,4 +171,41 @@ pub fn parse_file(file: impl AsRef<Path>) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::token::NumberType as NT;
+
+    use super::*;
+
+    macro_rules! example {
+        ($($name:ident : $input:tt => $expected:expr,)*) => {
+            $(
+                #[test]
+                fn $name() -> anyhow::Result<()> {
+                    let token_stream = $input.into_iter();
+                    let mut parser = Parser::new(token_stream);
+
+                    assert_eq!(Some($expected), parser.parse_next());
+                    assert_eq!(None, parser.parse_next());
+
+                    anyhow::Ok(())
+                }
+            )*
+        };
+    }
+
+    example! {
+        negated_number: [Token::Minus, Token::Number(NT::Integer("1".into())), Token::Eof] => Ok(Expr::Neg(Box::new(Expr::Number(Number::Int(1))))),
+        notted_bool: [Token::Bang, Token::False, Token::Eof] => Ok(Expr::Not(Box::new(Expr::Bool(false)))),
+        bool: [Token::True, Token::Eof] => Ok(Expr::Bool(true)),
+        int: [Token::Number(NumberType::Integer("12".into())), Token::Eof] => Ok(Expr::Number(Number::Int(12))),
+        float: [Token::Number(NumberType::Float("12.13".into())), Token::Eof] => Ok(Expr::Number(Number::Float(12.13))),
+        nil: [Token::Nil, Token::Eof] => Ok(Expr::Nil),
+        string: [Token::String("foo".into()), Token::Eof] => Ok(Expr::String("foo".into())),
+        group: [Token::LeftParen, Token::Nil, Token::RightParen, Token::Eof] => Ok(Expr::Group(Box::new(Expr::Nil))),
+
+        unbalanced: [Token::LeftParen, Token::False, Token::False, Token::Eof] => Err(ParseError::UnbalancedDelims(Delim::Parenthesis)),
+    }
 }
