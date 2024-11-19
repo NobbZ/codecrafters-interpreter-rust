@@ -1,8 +1,6 @@
 use std::path::Path;
 use std::{fmt::Display, fs, iter::Peekable};
 
-use anyhow::anyhow;
-
 use crate::{
     token::{NumberType, Token},
     token_stream::TokenStream,
@@ -54,6 +52,38 @@ impl Display for Expr {
     }
 }
 
+#[derive(Debug)]
+pub(crate) enum Delim {
+    Parenthesis,
+}
+
+impl std::fmt::Display for Delim {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let char = match self {
+            Self::Parenthesis => ')',
+        };
+
+        write!(f, "{}", char)
+    }
+}
+
+#[derive(Debug)]
+pub(crate) enum ParseError {
+    UnbalancedDelims(Delim),
+    UnexpectedEof,
+}
+
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnexpectedEof => write!(f, "File ended unexpectedly"),
+            Self::UnbalancedDelims(d) => write!(f, "Unbalanced delimiters, expected: '{}'", d),
+        }
+    }
+}
+
+impl std::error::Error for ParseError {}
+
 pub(crate) struct Parser<T>
 where
     T: Iterator<Item = Token>,
@@ -71,7 +101,7 @@ where
         }
     }
 
-    pub fn parse(&mut self) -> anyhow::Result<Vec<Expr>> {
+    pub fn parse(&mut self) -> Result<Vec<Expr>, ParseError> {
         let mut exprs = Vec::new();
 
         while let Some(expr) = self.parse_next() {
@@ -81,7 +111,7 @@ where
         Ok(exprs)
     }
 
-    fn parse_next(&mut self) -> Option<anyhow::Result<Expr>> {
+    fn parse_next(&mut self) -> Option<Result<Expr, ParseError>> {
         use self::Number as N;
         use NumberType as NT;
         use Token::*;
@@ -101,28 +131,28 @@ where
         }
     }
 
-    fn parse_group(&mut self) -> Option<anyhow::Result<Expr>> {
+    fn parse_group(&mut self) -> Option<Result<Expr, ParseError>> {
         match self.parse_next() {
             Some(Ok(expr)) => {
                 if let Some(Token::RightParen) = self.tokens.next() {
                     Some(Ok(Expr::Group(Box::new(expr))))
                 } else {
-                    Some(Err(anyhow!("unbalanced parenthesis")))
+                    Some(Err(ParseError::UnbalancedDelims(Delim::Parenthesis)))
                 }
             }
             err @ Some(Err(_)) => err,
-            None => Some(Err(anyhow!("unbalanced parenthesis"))),
+            None => Some(Err(ParseError::UnbalancedDelims(Delim::Parenthesis))),
         }
     }
 
-    fn parse_unary<C>(&mut self, constructor: C) -> Option<anyhow::Result<Expr>>
+    fn parse_unary<C>(&mut self, constructor: C) -> Option<Result<Expr, ParseError>>
     where
         C: Fn(Box<Expr>) -> Expr,
     {
         match self.parse_next() {
             Some(Ok(expr)) => Some(Ok(constructor(Box::new(expr)))),
             err @ Some(Err(_)) => err,
-            None => Some(Err(anyhow!("expression expected"))),
+            None => Some(Err(ParseError::UnexpectedEof)),
         }
     }
 }
