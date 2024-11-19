@@ -95,19 +95,23 @@ where
             Some(Nil) => Some(Ok(Expr::Nil)),
             Some(Bang) => self.parse_unary(Expr::Not),
             Some(Minus) => self.parse_unary(Expr::Neg),
-            Some(LeftParen) => match self.parse_next() {
-                Some(Ok(expr)) => {
-                    if let Some(RightParen) = self.tokens.next() {
-                        Some(Ok(Expr::Group(Box::new(expr))))
-                    } else {
-                        Some(Err(anyhow!("unbalanced parenthesis")))
-                    }
-                }
-                err @ Some(Err(_)) => err,
-                None => Some(Err(anyhow!("unbalanced parenthesis"))),
-            },
+            Some(LeftParen) => self.parse_group(),
             Some(Eof) => None,
             _ => unimplemented!(),
+        }
+    }
+
+    fn parse_group(&mut self) -> Option<anyhow::Result<Expr>> {
+        match self.parse_next() {
+            Some(Ok(expr)) => {
+                if let Some(Token::RightParen) = self.tokens.next() {
+                    Some(Ok(Expr::Group(Box::new(expr))))
+                } else {
+                    Some(Err(anyhow!("unbalanced parenthesis")))
+                }
+            }
+            err @ Some(Err(_)) => err,
+            None => Some(Err(anyhow!("unbalanced parenthesis"))),
         }
     }
 
