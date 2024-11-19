@@ -1,8 +1,14 @@
 use std::path::Path;
 use std::{fmt::Display, fs, iter::Peekable};
 
-use crate::{token::{Token, NumberType}, token_stream::TokenStream};
+use anyhow::anyhow;
 
+use crate::{
+    token::{NumberType, Token},
+    token_stream::TokenStream,
+};
+
+#[derive(Clone)]
 pub(crate) enum Number {
     Int(i64),
     Float(f64),
@@ -23,11 +29,13 @@ impl Display for Number {
     }
 }
 
+#[derive(Clone)]
 pub(crate) enum Expr {
     Bool(bool),
     Number(Number),
     String(String),
     Nil,
+    Group(Box<Expr>),
 }
 
 impl Display for Expr {
@@ -37,6 +45,7 @@ impl Display for Expr {
             Self::Number(n) => write!(f, "{}", n),
             Self::String(s) => write!(f, "{}", s),
             Self::Nil => write!(f, "nil"),
+            Self::Group(e) => write!(f, "(group {})", e),
         }
     }
 }
@@ -61,22 +70,39 @@ where
     pub fn parse(&mut self) -> anyhow::Result<Vec<Expr>> {
         let mut exprs = Vec::new();
 
-        for token in self.tokens.by_ref() {
-            let expr = match token {
-                Token::True => anyhow::Ok(Expr::Bool(true)),
-                Token::False => Ok(Expr::Bool(false)),
-                Token::Number(NumberType::Integer(i)) => Ok(Expr::Number(Number::Int(i.parse().unwrap()))),
-                Token::Number(NumberType::Float(f)) => Ok(Expr::Number(Number::Float(f.parse().unwrap()))),
-                Token::String(s) => Ok(Expr::String(s.clone())),
-                Token::Nil => Ok(Expr::Nil),
-                Token::Eof => return Ok(exprs),
-                _ => unimplemented!(),
-            };
-
+        while let Some(expr) = self.parse_next() {
             exprs.push(expr?);
         }
 
-        unreachable!("There should always be a EOF")
+        Ok(exprs)
+    }
+
+    fn parse_next(&mut self) -> Option<anyhow::Result<Expr>> {
+        use self::Number as N;
+        use NumberType as NT;
+        use Token::*;
+
+        match self.tokens.next() {
+            Some(True) => Some(Ok(Expr::Bool(true))),
+            Some(False) => Some(Ok(Expr::Bool(false))),
+            Some(Number(NT::Integer(i))) => Some(Ok(Expr::Number(N::Int(i.parse().unwrap())))),
+            Some(Number(NT::Float(f))) => Some(Ok(Expr::Number(N::Float(f.parse().unwrap())))),
+            Some(String(s)) => Some(Ok(Expr::String(s.clone()))),
+            Some(Nil) => Some(Ok(Expr::Nil)),
+            Some(LeftParen) => match self.parse_next() {
+                Some(Ok(expr)) => {
+                    if let Some(RightParen) = self.tokens.next() {
+                        Some(Ok(Expr::Group(Box::new(expr))))
+                    } else {
+                        Some(Err(anyhow!("unbalanced parenthesis")))
+                    }
+                }
+                err @ Some(Err(_)) => err,
+                None => Some(Err(anyhow!("unbalanced parenthesis"))),
+            },
+            Some(Eof) => None,
+            _ => unimplemented!(),
+        }
     }
 }
 
