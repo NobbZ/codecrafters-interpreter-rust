@@ -27,6 +27,21 @@ impl Display for Number {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Op {
+    Mul,
+    Div,
+}
+
+impl Display for Op {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Mul => write!(f, "*"),
+            Self::Div => write!(f, "/"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Expr {
     Bool(bool),
@@ -36,6 +51,7 @@ pub(crate) enum Expr {
     Group(Box<Expr>),
     Not(Box<Expr>),
     Neg(Box<Expr>),
+    Binary(Op, Box<Expr>, Box<Expr>),
 }
 
 impl Display for Expr {
@@ -48,6 +64,7 @@ impl Display for Expr {
             Self::Group(e) => write!(f, "(group {})", e),
             Self::Not(e) => write!(f, "(! {})", e),
             Self::Neg(e) => write!(f, "(- {})", e),
+            Self::Binary(op, e1, e2) => write!(f, "({} {} {})", op, e1, e2),
         }
     }
 }
@@ -116,7 +133,7 @@ where
         use NumberType as NT;
         use Token::*;
 
-        match self.tokens.next() {
+        let expr = (match self.tokens.next() {
             Some(True) => Some(Ok(Expr::Bool(true))),
             Some(False) => Some(Ok(Expr::Bool(false))),
             Some(Number(NT::Integer(i))) => Some(Ok(Expr::Number(N::Int(i.parse().unwrap())))),
@@ -128,7 +145,19 @@ where
             Some(LeftParen) => self.parse_group(),
             Some(Eof) => None,
             _ => unimplemented!(),
-        }
+        })?;
+
+        Some(expr.and_then(|expr| {
+            match self.tokens.peek() {
+                Some(Star) => self
+                    .parse_binary(|e| Expr::Binary(Op::Mul, Box::new(expr.clone()), e))
+                    .unwrap(),
+                Some(Slash) => self
+                    .parse_binary(|e| Expr::Binary(Op::Div, Box::new(expr.clone()), e))
+                    .unwrap(),
+                _ => Ok(expr),
+            }
+        }))
     }
 
     fn parse_group(&mut self) -> Option<Result<Expr, ParseError>> {
@@ -154,6 +183,18 @@ where
             err @ Some(Err(_)) => err,
             None => Some(Err(ParseError::UnexpectedEof)),
         }
+    }
+
+    fn parse_binary<C>(&mut self, constructor: C) -> Option<Result<Expr, ParseError>>
+    where
+        C: Fn(Box<Expr>) -> Expr,
+    {
+        self.tokens.next();
+        Some(match self.parse_next() {
+            Some(Ok(expr)) => Ok(constructor(Box::new(expr))),
+            Some(err @ Err(_)) => err,
+            None => Err(ParseError::UnexpectedEof),
+        })
     }
 }
 
@@ -207,6 +248,8 @@ mod tests {
         nil: [Token::Nil, Token::Eof] => Ok(Expr::Nil),
         string: [Token::String("foo".into()), Token::Eof] => Ok(Expr::String("foo".into())),
         group: [Token::LeftParen, Token::Nil, Token::RightParen, Token::Eof] => Ok(Expr::Group(Box::new(Expr::Nil))),
+        multiply: [Token::Number(NT::Integer("1".to_string())), Token::Star, Token::Number(NT::Integer("1".to_string())), Token::Eof] => Ok(Expr::Binary(Op::Mul, Box::new(Expr::Number(Number::Int(1))), Box::new(Expr::Number(Number::Int(1))))),
+        divide: [Token::Number(NT::Integer("1".to_string())), Token::Slash, Token::Number(NT::Integer("1".to_string())), Token::Eof] => Ok(Expr::Binary(Op::Div, Box::new(Expr::Number(Number::Int(1))), Box::new(Expr::Number(Number::Int(1))))),
 
         unbalanced: [Token::LeftParen, Token::False, Token::False, Token::Eof] => Err(ParseError::UnbalancedDelims(Delim::Parenthesis)),
     }
