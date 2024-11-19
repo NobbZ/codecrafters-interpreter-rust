@@ -177,6 +177,8 @@ pub fn parse_file(file: impl AsRef<Path>) -> anyhow::Result<()> {
 mod tests {
     use crate::token::NumberType as NT;
 
+    use pretty_assertions::assert_eq;
+
     use super::*;
 
     macro_rules! example {
