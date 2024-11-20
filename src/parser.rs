@@ -239,6 +239,28 @@ mod tests {
         };
     }
 
+    macro_rules! full_string_example {
+        ($($name:ident : $input:expr => $expected:expr,)*) => {
+            $(
+                #[test]
+                fn $name() -> anyhow::Result<()> {
+                    let token_stream = crate::token_stream::TokenStream::from($input.chars()).filter_map(|tok_res| match tok_res {
+                        Ok(t) => Some(t),
+                        Err(_) => None,
+                    });
+                    let mut parser = Parser::new(token_stream);
+
+                    let printed = format!("{}", parser.parse_next().unwrap().unwrap());
+
+                    assert_eq!($expected, printed);
+                    assert_eq!(None, parser.parse_next());
+
+                    Ok(())
+                }
+            )*
+        };
+    }
+
     example! {
         negated_number: [Token::Minus, Token::Number(NT::Integer("1".into())), Token::Eof] => Ok(Expr::Neg(Box::new(Expr::Number(Number::Int(1))))),
         notted_bool: [Token::Bang, Token::False, Token::Eof] => Ok(Expr::Not(Box::new(Expr::Bool(false)))),
@@ -260,5 +282,19 @@ mod tests {
         ] => Ok(Expr::Binary(Op::Div, Box::new(Expr::Binary(Op::Mul, Box::new(Expr::Number(Number::Int(23))), Box::new(Expr::Number(Number::Int(65))))), Box::new(Expr::Number(Number::Int(68))))),
 
         unbalanced: [Token::LeftParen, Token::False, Token::False, Token::Eof] => Err(ParseError::UnbalancedDelims(Delim::Parenthesis)),
+    }
+
+    full_string_example! {
+        str_negated_number: "-1" => "(- 1.0)",
+        str_notted_bool: "!false" => "(! false)",
+        str_bool: "true" => "true",
+        str_int: "12" => "12.0",
+        str_float: "12.13" => "12.13",
+        str_nil: "nil" => "nil",
+        str_string: "\"foo\"" => "foo",
+        str_group: "(nil)" => "(group nil)",
+        str_multiply: "1 * 1" => "(* 1.0 1.0)",
+        str_divide: "1 / 1" => "(/ 1.0 1.0)",
+        str_mixed: "23 * 65 / 68" => "(/ (* 23.0 65.0) 68.0)",
     }
 }
