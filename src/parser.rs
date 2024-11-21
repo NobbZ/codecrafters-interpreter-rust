@@ -19,18 +19,18 @@ impl Display for Op {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) enum Expr {
+pub(crate) enum Expr<'de> {
     Bool(bool),
-    Number(String),
-    String(String),
+    Number(&'de str),
+    String(&'de str),
     Nil,
-    Group(Box<Expr>),
-    Not(Box<Expr>),
-    Neg(Box<Expr>),
-    Binary(Op, Box<Expr>, Box<Expr>),
+    Group(Box<Expr<'de>>),
+    Not(Box<Expr<'de>>),
+    Neg(Box<Expr<'de>>),
+    Binary(Op, Box<Expr<'de>>, Box<Expr<'de>>),
 }
 
-impl Display for Expr {
+impl<'de> Display for Expr<'de> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Bool(b) => write!(f, "{}", b),
@@ -100,7 +100,7 @@ where
         }
     }
 
-    pub fn parse(&mut self) -> Result<Vec<Expr>, ParseError> {
+    pub fn parse(&mut self) -> Result<Vec<Expr<'de>>, ParseError> {
         let mut exprs = Vec::new();
 
         while let Some(expr) = self.parse_next() {
@@ -110,14 +110,14 @@ where
         Ok(exprs)
     }
 
-    fn parse_next(&mut self) -> Option<Result<Expr, ParseError>> {
+    fn parse_next(&mut self) -> Option<Result<Expr<'de>, ParseError>> {
         use Token::*;
 
         let expr = (match self.tokens.next() {
             Some(True) => Some(Ok(Expr::Bool(true))),
             Some(False) => Some(Ok(Expr::Bool(false))),
-            Some(Number(f)) => Some(Ok(Expr::Number(f.parse().unwrap()))),
-            Some(String(s)) => Some(Ok(Expr::String(s.to_string()))),
+            Some(Number(f)) => Some(Ok(Expr::Number(f))),
+            Some(String(s)) => Some(Ok(Expr::String(s))),
             Some(Nil) => Some(Ok(Expr::Nil)),
             Some(Bang) => self.parse_unary(Expr::Not),
             Some(Minus) => self.parse_unary(Expr::Neg),
@@ -139,7 +139,7 @@ where
         }))
     }
 
-    fn parse_group(&mut self) -> Option<Result<Expr, ParseError>> {
+    fn parse_group(&mut self) -> Option<Result<Expr<'de>, ParseError>> {
         match self.parse_next() {
             Some(Ok(expr)) => {
                 if let Some(Token::RightParen) = self.tokens.next() {
@@ -153,9 +153,9 @@ where
         }
     }
 
-    fn parse_unary<C>(&mut self, constructor: C) -> Option<Result<Expr, ParseError>>
+    fn parse_unary<C>(&mut self, constructor: C) -> Option<Result<Expr<'de>, ParseError>>
     where
-        C: Fn(Box<Expr>) -> Expr,
+        C: Fn(Box<Expr<'de>>) -> Expr<'de>,
     {
         match self.parse_next() {
             Some(Ok(expr)) => Some(Ok(constructor(Box::new(expr)))),
@@ -164,9 +164,9 @@ where
         }
     }
 
-    fn parse_binary<C>(&mut self, constructor: C) -> Option<Result<Expr, ParseError>>
+    fn parse_binary<C>(&mut self, constructor: C) -> Option<Result<Expr<'de>, ParseError>>
     where
-        C: Fn(Box<Expr>) -> Expr,
+        C: Fn(Box<Expr<'de>>) -> Expr<'de>,
     {
         self.tokens.next();
         Some(match self.parse_next() {
@@ -239,16 +239,16 @@ mod tests {
     }
 
     example! {
-        negated_number: [Token::Minus, Token::Number("1"), Token::Eof] => Ok(Expr::Neg(Box::new(Expr::Number("1".into())))),
+        negated_number: [Token::Minus, Token::Number("1"), Token::Eof] => Ok(Expr::Neg(Box::new(Expr::Number("1")))),
         notted_bool: [Token::Bang, Token::False, Token::Eof] => Ok(Expr::Not(Box::new(Expr::Bool(false)))),
         bool: [Token::True, Token::Eof] => Ok(Expr::Bool(true)),
-        int: [Token::Number("12"), Token::Eof] => Ok(Expr::Number("12".into())),
-        float: [Token::Number("12.13"), Token::Eof] => Ok(Expr::Number("12.13".into())),
+        int: [Token::Number("12"), Token::Eof] => Ok(Expr::Number("12")),
+        float: [Token::Number("12.13"), Token::Eof] => Ok(Expr::Number("12.13")),
         nil: [Token::Nil, Token::Eof] => Ok(Expr::Nil),
-        string: [Token::String("foo"), Token::Eof] => Ok(Expr::String("foo".into())),
+        string: [Token::String("foo"), Token::Eof] => Ok(Expr::String("foo")),
         group: [Token::LeftParen, Token::Nil, Token::RightParen, Token::Eof] => Ok(Expr::Group(Box::new(Expr::Nil))),
-        multiply: [Token::Number("1"), Token::Star, Token::Number("1"), Token::Eof] => Ok(Expr::Binary(Op::Mul, Box::new(Expr::Number("1".into())), Box::new(Expr::Number("1".into())))),
-        divide: [Token::Number("1"), Token::Slash, Token::Number("1"), Token::Eof] => Ok(Expr::Binary(Op::Div, Box::new(Expr::Number("1".into())), Box::new(Expr::Number("1".into())))),
+        multiply: [Token::Number("1"), Token::Star, Token::Number("1"), Token::Eof] => Ok(Expr::Binary(Op::Mul, Box::new(Expr::Number("1")), Box::new(Expr::Number("1")))),
+        divide: [Token::Number("1"), Token::Slash, Token::Number("1"), Token::Eof] => Ok(Expr::Binary(Op::Div, Box::new(Expr::Number("1")), Box::new(Expr::Number("1")))),
 
         mixed: [
             Token::Number("23"),
@@ -256,7 +256,7 @@ mod tests {
             Token::Number("65"),
             Token::Slash,
             Token::Number("68"),
-        ] => Ok(Expr::Binary(Op::Div, Box::new(Expr::Binary(Op::Mul, Box::new(Expr::Number("23".into())), Box::new(Expr::Number("65".into())))), Box::new(Expr::Number("68".into())))),
+        ] => Ok(Expr::Binary(Op::Div, Box::new(Expr::Binary(Op::Mul, Box::new(Expr::Number("23")), Box::new(Expr::Number("65")))), Box::new(Expr::Number("68")))),
 
         unbalanced: [Token::LeftParen, Token::False, Token::False, Token::Eof] => Err(ParseError::UnbalancedDelims(Delim::Parenthesis)),
     }
