@@ -25,32 +25,7 @@ impl fmt::Display for TokenError {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub(crate) enum NumberType {
-    /// Represents integral number tokens
-    Integer(String),
-
-    /// Represents floating point number tokens
-    Float(String),
-}
-
-impl NumberType {
-    /// Create a new number type based on the passed in `s` and `float`.
-    ///
-    /// Returns `NumberType::Integer(s)` when `float` is `false`, `NumberType::Float(s)`
-    /// otherwise.
-    pub(crate) fn new<S>(s: S, float: bool) -> Self
-    where
-        S: Into<String>,
-    {
-        match float {
-            true => Self::Float(s.into()),
-            false => Self::Integer(s.into()),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub(crate) enum Token {
+pub(crate) enum Token<'de> {
     LeftParen,
     RightParen,
 
@@ -76,9 +51,9 @@ pub(crate) enum Token {
     Gt,
     GtEq,
 
-    String(String),
-    Number(NumberType),
-    Ident(String),
+    String(&'de str),
+    Number(&'de str),
+    Ident(&'de str),
 
     And,
     Class,
@@ -102,7 +77,7 @@ pub(crate) enum Token {
     NewLine,
 }
 
-impl Token {
+impl<'de> Token<'de> {
     fn to_terminal(&self) -> String {
         let token_type = self.token_type();
         let lexeme = self.lexeme();
@@ -197,9 +172,8 @@ impl Token {
             GtEq => ">=".to_string(),
 
             String(s) => format!("\"{}\"", s),
-            Number(NumberType::Float(s)) => s.clone(),
-            Number(NumberType::Integer(s)) => s.clone(),
-            Ident(s) => s.clone(),
+            Number(s) => s.to_string(),
+            Ident(s) => s.to_string(),
 
             And => "and".to_string(),
             Class => "class".to_string(),
@@ -231,8 +205,8 @@ impl Token {
             | Semicolon | Slash | Eq | EqEq | Bang | BangEq | Lt | LtEq | Gt | GtEq | Ident(_)
             | And | Class | Else | False | For | Fun | If | Nil | Or | Print | Return | Super
             | This | True | Var | While | Eof => "null".to_string(),
-            String(s) => s.clone(),
-            Number(NumberType::Float(s)) => {
+            String(s) => s.to_string(),
+            Number(s) => {
                 let f = s
                     .parse::<f64>()
                     .unwrap_or_else(|_| unreachable!("Should always be a good float"))
@@ -243,7 +217,6 @@ impl Token {
                     format!("{}.0", f)
                 }
             }
-            Number(NumberType::Integer(s)) => format!("{}.0", s),
             Skip | NewLine => unreachable!("This tokens should never be linified"),
         }
     }
@@ -255,7 +228,7 @@ pub fn tokenize(args: TokenizeArgs) -> Result<()> {
 
     let mut err_cnt = 0;
 
-    let tokens = TokenStream::from(file_contents.chars());
+    let tokens = TokenStream::from(file_contents.as_ref());
 
     for token in tokens {
         match token {

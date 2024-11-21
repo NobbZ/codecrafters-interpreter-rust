@@ -1,46 +1,30 @@
-use std::iter::Peekable;
-
-use crate::token::{NumberType, Token, TokenError};
+use crate::token::{Token, TokenError};
 
 #[derive(Debug)]
-pub(crate) struct TokenStream<I: Iterator<Item = char>> {
-    inner: Peekable<I>,
+pub(crate) struct TokenStream<'de> {
+    whole: &'de str,
+    rest: &'de str,
     errors: Vec<(usize, TokenError)>,
     finished: bool,
     pub(crate) line: usize,
+    byte_pos: usize,
 }
 
-impl<I> From<Peekable<I>> for TokenStream<I>
-where
-    I: Iterator<Item = char>,
-{
-    fn from(chars: Peekable<I>) -> Self
-    where
-        I: Iterator<Item = char>,
-    {
+impl<'de> From<&'de str> for TokenStream<'de> {
+    fn from(chars: &'de str) -> Self {
         TokenStream {
-            inner: chars,
+            whole: chars,
+            rest: chars,
             errors: vec![],
             line: 1,
             finished: false,
+            byte_pos: 0,
         }
     }
 }
 
-impl<I> From<I> for TokenStream<I>
-where
-    I: Iterator<Item = char>,
-{
-    fn from(chars: I) -> Self {
-        TokenStream::from(chars.peekable())
-    }
-}
-
-impl<I> Iterator for TokenStream<I>
-where
-    I: Iterator<Item = char>,
-{
-    type Item = Result<Token, (usize, TokenError)>;
+impl<'de> Iterator for TokenStream<'de> {
+    type Item = Result<Token<'de>, (usize, TokenError)>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.finished {
@@ -64,19 +48,21 @@ where
     }
 }
 
-impl<I> TokenStream<I>
-where
-    I: Iterator<Item = char>,
-{
+impl<'de> TokenStream<'de> {
     fn next_char(&mut self) -> Option<char> {
-        self.inner.next()
+        let mut chars = self.rest.chars();
+        let c = chars.next()?;
+        self.rest = chars.as_str();
+        self.byte_pos += c.len_utf8();
+        Some(c)
     }
 
-    fn peek_char(&mut self) -> Option<&char> {
-        self.inner.peek()
+    fn peek_char(&mut self) -> Option<char> {
+        let mut chars = self.rest.chars();
+        chars.next()
     }
 
-    fn next_token(&mut self) -> Result<Token, TokenError> {
+    fn next_token(&mut self) -> Result<Token<'de>, TokenError> {
         match self.next_char() {
             Some(' ' | '\t') => Ok(Token::Skip),
             Some('\n') => Ok(Token::NewLine),
@@ -136,23 +122,21 @@ where
         }
     }
 
-    fn scan_string(&mut self) -> Result<Token, TokenError> {
-        let mut string = String::new();
+    fn scan_string(&mut self) -> Result<Token<'de>, TokenError> {
+        let beginning = self.byte_pos;
 
         while let Some(c) = self.next_char() {
             if c == '"' {
-                return Ok(Token::String(string));
+                return Ok(Token::String(
+                    &self.whole[beginning..self.byte_pos - '"'.len_utf8()],
+                ));
             }
-            string.push(c);
         }
 
         Err(TokenError::UnterminatedString)
     }
 
-    fn skip_until(&mut self, until: char)
-    where
-        I: Iterator<Item = char>,
-    {
+    fn skip_until(&mut self, until: char) {
         while let Some(c) = self.next_char() {
             if c == until {
                 break;
@@ -160,60 +144,49 @@ where
         }
     }
 
-    fn scan_number(&mut self, initial_digit: char) -> Result<Token, TokenError> {
-        let mut string = initial_digit.to_string();
+    fn scan_number(&mut self, initial_digit: char) -> Result<Token<'de>, TokenError> {
+        let start = self.byte_pos - initial_digit.len_utf8();
         let mut float = false;
 
         loop {
             match &self.peek_char() {
                 None => {
                     self.next_char();
-                    return Ok(Token::Number(NumberType::new(string, float)));
+                    return Ok(Token::Number(&self.whole[start..self.byte_pos]));
                 }
                 Some(d) if d.is_ascii_digit() => {
-                    let Some(d) = self.next_char() else {
-                        unreachable!("chars.next must return a some, guaranteed by prev. peek")
-                    };
-                    string.push(d);
+                    self.next_char();
                 }
                 Some('.') if !float => {
                     self.next_char();
                     float = true;
-                    string.push('.');
                 }
-                Some(_c) => return Ok(Token::Number(NumberType::new(string, float))),
+                Some(_) => return Ok(Token::Number(&self.whole[start..self.byte_pos])),
             }
         }
     }
 
-    fn scan_ident(&mut self, initial_char: char) -> Result<Token, TokenError>
-    where
-        I: Iterator<Item = char>,
-    {
-        let mut string = initial_char.to_string();
+    fn scan_ident(&mut self, initial_char: char) -> Result<Token<'de>, TokenError> {
+        let start = self.byte_pos - initial_char.len_utf8();
 
         loop {
             match &self.peek_char() {
                 None => {
                     self.next_char();
-                    return self.decide_reserved(string);
+                    return self.decide_reserved(&self.whole[start..self.byte_pos]);
                 }
-                Some(c) if c.is_ascii_alphabetic() || c.is_ascii_digit() || c == &&'_' => {
-                    let Some(c) = self.next_char() else {
+                Some(c) if c.is_ascii_alphabetic() || c.is_ascii_digit() || c == &'_' => {
+                    let Some(_) = self.next_char() else {
                         unreachable!("chars.next must return a some, guaranteed by prev. peek")
                     };
-                    string.push(c);
                 }
-                Some(_c) => return self.decide_reserved(string),
+                Some(_c) => return self.decide_reserved(&self.whole[start..self.byte_pos]),
             }
         }
     }
 
-    fn decide_reserved<S>(&self, canditate: S) -> Result<Token, TokenError>
-    where
-        S: AsRef<str>,
-    {
-        match canditate.as_ref() {
+    fn decide_reserved(&self, canditate: &'de str) -> Result<Token<'de>, TokenError> {
+        match canditate {
             "and" => Ok(Token::And),
             "class" => Ok(Token::Class),
             "else" => Ok(Token::Else),
@@ -230,14 +203,13 @@ where
             "true" => Ok(Token::True),
             "var" => Ok(Token::Var),
             "while" => Ok(Token::While),
-            ident => Ok(Token::Ident(ident.to_string())),
+            ident => Ok(Token::Ident(ident)),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::token::NumberType;
     use crate::token::Token::*;
 
     use super::*;
@@ -249,7 +221,7 @@ mod tests {
             $(
                 #[test]
                 fn $name() -> anyhow::Result<()> {
-                    let token_stream = TokenStream::from($input.chars());
+                    let token_stream = TokenStream::from($input);
                     let mut err_cnt = 0;
 
                     let tokens = token_stream
@@ -280,11 +252,11 @@ mod tests {
         scan_with_comment: "()// Comment" => (vec![LeftParen, RightParen, Eof], 0),
         scan_with_slash: "/()" => (vec![Slash, LeftParen, RightParen, Eof], 0),
         scan_with_whitespace: "(\t\n )" => (vec![LeftParen, RightParen, Eof], 0),
-        scan_string: "\"hello\"" => (vec![String("hello".into()), Eof], 0),
+        scan_string: "\"hello\"" => (vec![String("hello"), Eof], 0),
         scan_unclosed_string: "\"hello" => (vec![Eof], 1),
-        scan_integer: "42" => (vec![Number(NumberType::Integer("42".into())), Eof], 0),
-        scan_float: "1234.1234" => (vec![Number(NumberType::Float("1234.1234".into())), Eof], 0),
-        scan_ident: "foo bar _hello" => (vec![Ident("foo".into()), Ident("bar".into()), Ident("_hello".into()), Eof], 0),
+        scan_integer: "42" => (vec![Number("42"), Eof], 0),
+        scan_float: "1234.1234" => (vec![Number("1234.1234"), Eof], 0),
+        scan_ident: "foo bar _hello" => (vec![Ident("foo"), Ident("bar"), Ident("_hello"), Eof], 0),
         scan_reserved: "and" => (vec![And, Eof], 0),
     }
 }

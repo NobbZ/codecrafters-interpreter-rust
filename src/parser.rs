@@ -1,31 +1,7 @@
 use std::path::Path;
 use std::{fmt::Display, fs, iter::Peekable};
 
-use crate::{
-    token::{NumberType, Token},
-    token_stream::TokenStream,
-};
-
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) enum Number {
-    Int(i64),
-    Float(f64),
-}
-
-impl Display for Number {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
-            Number::Int(i) => i.to_string(),
-            Number::Float(f) => f.to_string(),
-        };
-
-        if s.contains('.') {
-            write!(f, "{}", s)
-        } else {
-            write!(f, "{}.0", s)
-        }
-    }
-}
+use crate::{token::Token, token_stream::TokenStream};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Op {
@@ -45,7 +21,7 @@ impl Display for Op {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Expr {
     Bool(bool),
-    Number(Number),
+    Number(String),
     String(String),
     Nil,
     Group(Box<Expr>),
@@ -58,7 +34,13 @@ impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Bool(b) => write!(f, "{}", b),
-            Self::Number(n) => write!(f, "{}", n),
+            Self::Number(n) => {
+                if n.contains('.') {
+                    write!(f, "{}", n.trim_end_matches('0'))
+                } else {
+                    write!(f, "{}.0", n)
+                }
+            }
             Self::String(s) => write!(f, "{}", s),
             Self::Nil => write!(f, "nil"),
             Self::Group(e) => write!(f, "(group {})", e),
@@ -101,16 +83,16 @@ impl std::fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
-pub(crate) struct Parser<T>
+pub(crate) struct Parser<'de, T>
 where
-    T: Iterator<Item = Token>,
+    T: Iterator<Item = Token<'de>>,
 {
     tokens: Peekable<T>,
 }
 
-impl<T> Parser<T>
+impl<'de, T> Parser<'de, T>
 where
-    T: Iterator<Item = Token>,
+    T: Iterator<Item = Token<'de>>,
 {
     pub fn new(token_stream: T) -> Self {
         Self {
@@ -129,16 +111,13 @@ where
     }
 
     fn parse_next(&mut self) -> Option<Result<Expr, ParseError>> {
-        use self::Number as N;
-        use NumberType as NT;
         use Token::*;
 
         let expr = (match self.tokens.next() {
             Some(True) => Some(Ok(Expr::Bool(true))),
             Some(False) => Some(Ok(Expr::Bool(false))),
-            Some(Number(NT::Integer(i))) => Some(Ok(Expr::Number(N::Int(i.parse().unwrap())))),
-            Some(Number(NT::Float(f))) => Some(Ok(Expr::Number(N::Float(f.parse().unwrap())))),
-            Some(String(s)) => Some(Ok(Expr::String(s.clone()))),
+            Some(Number(f)) => Some(Ok(Expr::Number(f.parse().unwrap()))),
+            Some(String(s)) => Some(Ok(Expr::String(s.to_string()))),
             Some(Nil) => Some(Ok(Expr::Nil)),
             Some(Bang) => self.parse_unary(Expr::Not),
             Some(Minus) => self.parse_unary(Expr::Neg),
@@ -200,7 +179,7 @@ where
 
 pub fn parse_file(file: impl AsRef<Path>) -> anyhow::Result<()> {
     let content = fs::read_to_string(file)?;
-    let ts = TokenStream::from(content.chars()).filter_map(|t| match t {
+    let ts = TokenStream::from(content.as_ref()).filter_map(|t| match t {
         Ok(t) => Some(t),
         Err(_) => None,
     });
@@ -216,8 +195,6 @@ pub fn parse_file(file: impl AsRef<Path>) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::token::NumberType as NT;
-
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -244,7 +221,7 @@ mod tests {
             $(
                 #[test]
                 fn $name() -> anyhow::Result<()> {
-                    let token_stream = crate::token_stream::TokenStream::from($input.chars()).filter_map(|tok_res| match tok_res {
+                    let token_stream = crate::token_stream::TokenStream::from($input).filter_map(|tok_res| match tok_res {
                         Ok(t) => Some(t),
                         Err(_) => None,
                     });
@@ -262,24 +239,24 @@ mod tests {
     }
 
     example! {
-        negated_number: [Token::Minus, Token::Number(NT::Integer("1".into())), Token::Eof] => Ok(Expr::Neg(Box::new(Expr::Number(Number::Int(1))))),
+        negated_number: [Token::Minus, Token::Number("1"), Token::Eof] => Ok(Expr::Neg(Box::new(Expr::Number("1".into())))),
         notted_bool: [Token::Bang, Token::False, Token::Eof] => Ok(Expr::Not(Box::new(Expr::Bool(false)))),
         bool: [Token::True, Token::Eof] => Ok(Expr::Bool(true)),
-        int: [Token::Number(NumberType::Integer("12".into())), Token::Eof] => Ok(Expr::Number(Number::Int(12))),
-        float: [Token::Number(NumberType::Float("12.13".into())), Token::Eof] => Ok(Expr::Number(Number::Float(12.13))),
+        int: [Token::Number("12"), Token::Eof] => Ok(Expr::Number("12".into())),
+        float: [Token::Number("12.13"), Token::Eof] => Ok(Expr::Number("12.13".into())),
         nil: [Token::Nil, Token::Eof] => Ok(Expr::Nil),
-        string: [Token::String("foo".into()), Token::Eof] => Ok(Expr::String("foo".into())),
+        string: [Token::String("foo"), Token::Eof] => Ok(Expr::String("foo".into())),
         group: [Token::LeftParen, Token::Nil, Token::RightParen, Token::Eof] => Ok(Expr::Group(Box::new(Expr::Nil))),
-        multiply: [Token::Number(NT::Integer("1".to_string())), Token::Star, Token::Number(NT::Integer("1".to_string())), Token::Eof] => Ok(Expr::Binary(Op::Mul, Box::new(Expr::Number(Number::Int(1))), Box::new(Expr::Number(Number::Int(1))))),
-        divide: [Token::Number(NT::Integer("1".to_string())), Token::Slash, Token::Number(NT::Integer("1".to_string())), Token::Eof] => Ok(Expr::Binary(Op::Div, Box::new(Expr::Number(Number::Int(1))), Box::new(Expr::Number(Number::Int(1))))),
-        
+        multiply: [Token::Number("1"), Token::Star, Token::Number("1"), Token::Eof] => Ok(Expr::Binary(Op::Mul, Box::new(Expr::Number("1".into())), Box::new(Expr::Number("1".into())))),
+        divide: [Token::Number("1"), Token::Slash, Token::Number("1"), Token::Eof] => Ok(Expr::Binary(Op::Div, Box::new(Expr::Number("1".into())), Box::new(Expr::Number("1".into())))),
+
         mixed: [
-            Token::Number(NT::Integer("23".into())),
+            Token::Number("23"),
             Token::Star,
-            Token::Number(NT::Integer("65".into())),
+            Token::Number("65"),
             Token::Slash,
-            Token::Number(NT::Integer("68".into())),
-        ] => Ok(Expr::Binary(Op::Div, Box::new(Expr::Binary(Op::Mul, Box::new(Expr::Number(Number::Int(23))), Box::new(Expr::Number(Number::Int(65))))), Box::new(Expr::Number(Number::Int(68))))),
+            Token::Number("68"),
+        ] => Ok(Expr::Binary(Op::Div, Box::new(Expr::Binary(Op::Mul, Box::new(Expr::Number("23".into())), Box::new(Expr::Number("65".into())))), Box::new(Expr::Number("68".into())))),
 
         unbalanced: [Token::LeftParen, Token::False, Token::False, Token::Eof] => Err(ParseError::UnbalancedDelims(Delim::Parenthesis)),
     }
