@@ -37,10 +37,12 @@ impl<'de> Display for Expr<'de> {
         match self {
             Self::Bool(b) => write!(f, "{}", b),
             Self::Number(n) => {
-                if n.contains('.') {
-                    write!(f, "{}", n.trim_end_matches('0'))
+                let n: f64 = n.parse().unwrap();
+                let s = n.to_string();
+                if s.contains('.') {
+                    write!(f, "{}", s)
                 } else {
-                    write!(f, "{}.0", n)
+                    write!(f, "{}.0", s)
                 }
             }
             Self::String(s) => write!(f, "{}", s),
@@ -304,5 +306,7 @@ mod tests {
         str_divide: "1 / 1" => "(/ 1.0 1.0)",
         str_mixed: "23 * 65 / 68" => "(/ (* 23.0 65.0) 68.0)",
         str_complex_with_sign: "(67 * -28 / (68 * 64))" => "(group (/ (* 67.0 (- 28.0)) (group (* 68.0 64.0))))",
+        str_zero_float: "0.0" => "0.0",
+        str_zero_int: "0" => "0.0",
     }
 }
