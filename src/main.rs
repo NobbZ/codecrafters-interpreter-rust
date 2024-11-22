@@ -8,7 +8,12 @@ use std::process::ExitCode;
 use interface::{InterpreterCommand, InterpreterParser, TokenizeArgs};
 
 fn main() -> ExitCode {
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
     let args = <InterpreterParser as clap::Parser>::parse();
+
+    tracing::info!(?args, "greetings");
 
     use InterpreterCommand::*;
 

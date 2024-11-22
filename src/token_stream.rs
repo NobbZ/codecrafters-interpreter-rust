@@ -63,7 +63,7 @@ impl<'de> TokenStream<'de> {
     }
 
     fn next_token(&mut self) -> Result<Token<'de>, TokenError> {
-        match self.next_char() {
+        let token = match self.next_char() {
             Some(' ' | '\t') => Ok(Token::Skip),
             Some('\n') => Ok(Token::NewLine),
             Some('(') => Ok(Token::LeftParen),
@@ -119,7 +119,11 @@ impl<'de> TokenStream<'de> {
                 self.finished = true;
                 Ok(Token::Eof)
             }
-        }
+        };
+
+        tracing::info!(?token, "scanned next token");
+
+        token
     }
 
     fn scan_string(&mut self) -> Result<Token<'de>, TokenError> {
