@@ -187,12 +187,16 @@ where
     fn group(&mut self) -> Option<ParseResult<'de>> {
         if self.tokens.peek() == Some(&Token::LeftParen) {
             self.tokens.next();
+            let toplevel = self.toplevel;
+            self.toplevel = true;
             let inner = self.expr()?;
 
             let e = match inner {
                 Ok(e) => e,
                 err @ Err(_) => return Some(err),
             };
+
+            self.toplevel = toplevel;
 
             if self.tokens.next() == Some(Token::RightParen) {
                 return Some(Ok(Expr::Group(Box::new(e))));
@@ -299,5 +303,6 @@ mod tests {
         str_multiply: "1 * 1" => "(* 1.0 1.0)",
         str_divide: "1 / 1" => "(/ 1.0 1.0)",
         str_mixed: "23 * 65 / 68" => "(/ (* 23.0 65.0) 68.0)",
+        str_complex_with_sign: "(67 * -28 / (68 * 64))" => "(group (/ (* 67.0 (- 28.0)) (group (* 68.0 64.0))))",
     }
 }
