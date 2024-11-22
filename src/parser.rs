@@ -9,13 +9,17 @@ type ParseResult<'de> = Result<Expr<'de>, ParseError>;
 pub(crate) enum Op {
     Mul,
     Div,
+    Sub,
+    Add,
 }
 
 impl Display for Op {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Mul => write!(f, "*"),
-            Self::Div => write!(f, "/"),
+            Op::Mul => write!(f, "*"),
+            Op::Div => write!(f, "/"),
+            Op::Sub => write!(f, "-"),
+            Op::Add => write!(f, "+"),
         }
     }
 }
@@ -127,7 +131,9 @@ where
         if self.toplevel {
             self.toplevel = false;
 
-            while let Some(Token::Star | Token::Slash) = self.tokens.peek() {
+            while let Some(Token::Star | Token::Slash | Token::Plus | Token::Minus) =
+                self.tokens.peek()
+            {
                 let op = self.tokens.next()?;
                 let expr = self.expr()?;
                 let Ok(rhs) = expr else { return Some(expr) };
@@ -135,6 +141,8 @@ where
                 let actual_op = match op {
                     Token::Star => Op::Mul,
                     Token::Slash => Op::Div,
+                    Token::Plus => Op::Add,
+                    Token::Minus => Op::Sub,
                     _ => unreachable!(),
                 };
 
@@ -308,5 +316,6 @@ mod tests {
         str_complex_with_sign: "(67 * -28 / (68 * 64))" => "(group (/ (* 67.0 (- 28.0)) (group (* 68.0 64.0))))",
         str_zero_float: "0.0" => "0.0",
         str_zero_int: "0" => "0.0",
+        str_add_simple: "1 + 1" => "(+ 1.0 1.0)",
     }
 }
