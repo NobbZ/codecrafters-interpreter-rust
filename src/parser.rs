@@ -3,6 +3,8 @@ use std::{fmt::Display, fs, iter::Peekable};
 
 use crate::{token::Token, token_stream::TokenStream};
 
+type ParseResult<'de> = Result<Expr<'de>, ParseError>;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Op {
     Mul,
@@ -69,13 +71,11 @@ impl std::fmt::Display for Delim {
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum ParseError {
     UnbalancedDelims(Delim),
-    UnexpectedEof,
 }
 
 impl std::fmt::Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::UnexpectedEof => write!(f, "File ended unexpectedly"),
             Self::UnbalancedDelims(d) => write!(f, "Unbalanced delimiters, expected: '{}'", d),
         }
     }
@@ -88,6 +88,8 @@ where
     T: Iterator<Item = Token<'de>>,
 {
     tokens: Peekable<T>,
+    // TODO: get rid of this…
+    toplevel: bool,
 }
 
 impl<'de, T> Parser<'de, T>
@@ -97,83 +99,109 @@ where
     pub fn new(token_stream: T) -> Self {
         Self {
             tokens: token_stream.peekable(),
+            toplevel: true,
         }
     }
 
     pub fn parse(&mut self) -> Result<Vec<Expr<'de>>, ParseError> {
         let mut exprs = Vec::new();
 
-        while let Some(expr) = self.parse_next() {
+        while let Some(expr) = self.expr() {
             exprs.push(expr?);
         }
 
         Ok(exprs)
     }
 
-    fn parse_next(&mut self) -> Option<Result<Expr<'de>, ParseError>> {
-        use Token::*;
+    fn expr(&mut self) -> Option<ParseResult<'de>> {
+        let mut expr = self
+            .literal()
+            .or_else(|| self.unary())
+            .or_else(|| self.group())?;
+        let Ok(ref mut lhs) = expr else {
+            return Some(expr);
+        };
 
-        let expr = (match self.tokens.next() {
-            Some(True) => Some(Ok(Expr::Bool(true))),
-            Some(False) => Some(Ok(Expr::Bool(false))),
-            Some(Number(f)) => Some(Ok(Expr::Number(f))),
-            Some(String(s)) => Some(Ok(Expr::String(s))),
-            Some(Nil) => Some(Ok(Expr::Nil)),
-            Some(Bang) => self.parse_unary(Expr::Not),
-            Some(Minus) => self.parse_unary(Expr::Neg),
-            Some(LeftParen) => self.parse_group(),
-            Some(Eof) => None,
-            _ => unimplemented!(),
-        })?;
+        if self.toplevel {
+            self.toplevel = false;
 
-        Some(expr.and_then(|expr| {
-            match self.tokens.peek() {
-                Some(Star) => self
-                    .parse_binary(|e| Expr::Binary(Op::Mul, Box::new(expr.clone()), e))
-                    .unwrap(),
-                Some(Slash) => self
-                    .parse_binary(|e| Expr::Binary(Op::Div, Box::new(expr.clone()), e))
-                    .unwrap(),
-                _ => Ok(expr),
+            while let Some(Token::Star | Token::Slash) = self.tokens.peek() {
+                let op = self.tokens.next()?;
+                let expr = self.expr()?;
+                let Ok(rhs) = expr else { return Some(expr) };
+
+                let actual_op = match op {
+                    Token::Star => Op::Mul,
+                    Token::Slash => Op::Div,
+                    _ => unreachable!(),
+                };
+
+                *lhs = Expr::Binary(actual_op, Box::new(lhs.clone()), Box::new(rhs));
             }
-        }))
-    }
 
-    fn parse_group(&mut self) -> Option<Result<Expr<'de>, ParseError>> {
-        match self.parse_next() {
-            Some(Ok(expr)) => {
-                if let Some(Token::RightParen) = self.tokens.next() {
-                    Some(Ok(Expr::Group(Box::new(expr))))
-                } else {
-                    Some(Err(ParseError::UnbalancedDelims(Delim::Parenthesis)))
-                }
-            }
-            err @ Some(Err(_)) => err,
-            None => Some(Err(ParseError::UnbalancedDelims(Delim::Parenthesis))),
+            self.toplevel = true;
+
+            Some(Ok(lhs.clone()))
+        } else {
+            Some(expr)
         }
     }
 
-    fn parse_unary<C>(&mut self, constructor: C) -> Option<Result<Expr<'de>, ParseError>>
-    where
-        C: Fn(Box<Expr<'de>>) -> Expr<'de>,
-    {
-        match self.parse_next() {
-            Some(Ok(expr)) => Some(Ok(constructor(Box::new(expr)))),
-            err @ Some(Err(_)) => err,
-            None => Some(Err(ParseError::UnexpectedEof)),
+    fn literal(&mut self) -> Option<ParseResult<'de>> {
+        let lit = match self.tokens.peek() {
+            Some(Token::True) => Some(Ok(Expr::Bool(true))),
+            Some(Token::False) => Some(Ok(Expr::Bool(false))),
+            Some(Token::Number(f)) => Some(Ok(Expr::Number(f))),
+            Some(Token::String(s)) => Some(Ok(Expr::String(s))),
+            Some(Token::Nil) => Some(Ok(Expr::Nil)),
+            Some(_) => None,
+            None => None,
+        };
+
+        if lit.is_some() {
+            self.tokens.next();
+        };
+
+        lit
+    }
+
+    fn unary(&mut self) -> Option<ParseResult<'de>> {
+        if ![Some(&Token::Bang), Some(&Token::Minus)].contains(&self.tokens.peek()) {
+            return None;
+        }
+
+        let c = match self.tokens.next() {
+            Some(Token::Minus) => Expr::Neg,
+            Some(Token::Bang) => Expr::Not,
+            _ => unreachable!(),
+        };
+
+        let expr = self.expr()?;
+
+        match expr {
+            Ok(e) => Some(Ok(c(Box::new(e)))),
+            err @ Err(_) => Some(err),
         }
     }
 
-    fn parse_binary<C>(&mut self, constructor: C) -> Option<Result<Expr<'de>, ParseError>>
-    where
-        C: Fn(Box<Expr<'de>>) -> Expr<'de>,
-    {
-        self.tokens.next();
-        Some(match self.parse_next() {
-            Some(Ok(expr)) => Ok(constructor(Box::new(expr))),
-            Some(err @ Err(_)) => err,
-            None => Err(ParseError::UnexpectedEof),
-        })
+    fn group(&mut self) -> Option<ParseResult<'de>> {
+        if self.tokens.peek() == Some(&Token::LeftParen) {
+            self.tokens.next();
+            let inner = self.expr()?;
+
+            let e = match inner {
+                Ok(e) => e,
+                err @ Err(_) => return Some(err),
+            };
+
+            if self.tokens.next() == Some(Token::RightParen) {
+                return Some(Ok(Expr::Group(Box::new(e))));
+            } else {
+                return Some(Err(ParseError::UnbalancedDelims(Delim::Parenthesis)));
+            }
+        }
+
+        None
     }
 }
 
@@ -207,8 +235,7 @@ mod tests {
                     let token_stream = $input.into_iter();
                     let mut parser = Parser::new(token_stream);
 
-                    assert_eq!(Some($expected), parser.parse_next());
-                    assert_eq!(None, parser.parse_next());
+                    assert_eq!(Some($expected), parser.expr());
 
                     anyhow::Ok(())
                 }
@@ -227,10 +254,9 @@ mod tests {
                     });
                     let mut parser = Parser::new(token_stream);
 
-                    let printed = format!("{}", parser.parse_next().unwrap().unwrap());
+                    let printed = format!("{}", parser.expr().unwrap().unwrap());
 
                     assert_eq!($expected, printed);
-                    assert_eq!(None, parser.parse_next());
 
                     Ok(())
                 }
